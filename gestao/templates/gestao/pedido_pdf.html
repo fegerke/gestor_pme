@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+{% load l10n gestao_filters static %}
+<head>
+    <meta charset="UTF-8">
+    <title>Pedido Nº {{ pedido.numero_pedido }}</title>
+    <style>
+        @page { size: A4; margin: 1.5cm; }
+        body { font-family: 'Helvetica', 'Arial', sans-serif; font-size: 10pt; color: #333; }
+        
+        .layout-table { width: 100%; border-collapse: collapse; }
+        .layout-table td { border: none; padding: 0; vertical-align: middle; }
+
+        .header-table { border-bottom: 2px solid #000; padding-bottom: 10px; margin-bottom: 5px; } 
+        .header-table img.logo { max-width: 150px; max-height: 60px; }
+        .company-details { text-align: right; font-size: 9pt; line-height: 1.5; }
+        .company-details img.icon { width: 12px; height: 12px; vertical-align: middle; margin-right: 4px; }
+        
+        .pedido-title-container h2 { margin: 10px 0; font-weight: normal; }
+        .pedido-title-container p { margin: 10px 0; text-align: right; }
+
+        .info-table { margin-bottom: 20px; }
+        .info-table td { border: 1px solid #ccc; padding: 10px; font-size: 9pt; line-height: 1.5; vertical-align: middle; }
+        
+        .items-table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+        .items-table th, .items-table td { border: 1px solid #ccc; padding: 6px 8px; text-align: left; }
+        .items-table th { background-color: #f2f2f2; }
+        .items-table td.qty, .items-table td.price { text-align: right; }
+
+        .qty, .price { text-align: right; }
+        
+        .totals { margin-top: 10px; float: right; width: 45%; font-size: 10pt; }
+        .totals table { width: 100%; }
+        .totals td { padding: 5px 8px; }
+        .totals .total-row td { border-top: 1px solid #aaa; font-weight: bold; font-size: 12pt; padding-top: 8px; }
+        
+        .paid-stamp { 
+            color: #008000; border: 3px solid #008000; padding: 5px; 
+            font-size: 20px; font-weight: bold; text-align: center; 
+            transform: rotate(-15deg); opacity: 0.5; max-width: 100px;
+            margin: 0 auto;
+        }
+        
+        .pix-info { text-align: center; }
+        .pix-info img { max-width: 110px; }
+        .cutting-line {
+            border: none;
+            border-top: 1px solid #666; /* Linha SÓLIDA cinza escuro */
+            margin: 0; /* Remove margens extras do hr */
+        }
+        .cutting-line-container {
+            clear: both; /* Garante que fique abaixo de floats */
+            padding-top: 20px; /* Espaço acima da linha */
+            width: 100%; /* Ocupa toda a largura */
+        }
+    </style>
+</head>
+<body>
+
+    <table class="layout-table header-table">
+        <tr>
+            <td style="width: 50%;">
+                {% if empresa.logo %}<img src="{{ empresa.logo.url }}" class="logo">{% else %}<h1 style="font-size: 18pt; font-weight: bold;">{{ empresa.nome_fantasia }}</h1>{% endif %}
+            </td>
+            <td class="company-details">
+                <strong style="font-size: 14pt;">{{ empresa.nome_fantasia }}</strong><br>
+                <span>
+                    <img src="{% static 'gestao/img/whatsapp.svg' %}" class="icon">
+                    {{ empresa.celular|default:empresa.telefone_fixo|formatar_telefone }}
+                </span><br>
+                <span>
+                    <img src="{% static 'gestao/img/instagram.svg' %}" class="icon">
+                    {{ empresa.rede_social }}
+                </span>
+            </td>
+        </tr>
+    </table>
+
+    <table class="layout-table pedido-title-container">
+        <tr>
+            <td><h2>Pedido Nº: <strong>{{ pedido.numero_pedido }}</strong></h2></td>
+            <td><p>Data de Emissão: <strong>{{ pedido.data_emissao|date:"d/m/Y" }}</strong></p></td>
+        </tr>
+    </table>
+
+    <table class="layout-table info-table">
+        <tr>
+            <td style="width: 65%;">
+                <p style="margin: 0; padding: 0;">
+                    <strong style="font-size: 12pt;">{{ pedido.cliente.nome_razao_social }}</strong><br>
+                   <strong>Endereço:</strong> {{ pedido.cliente.logradouro|default_if_none:"" }}, {{ pedido.cliente.numero|default_if_none:"" }}{% if pedido.cliente.complemento %} - {{ pedido.cliente.complemento }}{% endif %}<br>
+                    {% if pedido.cliente.bairro %}{{ pedido.cliente.bairro }}, {% endif %}{{ pedido.cliente.cidade|default_if_none:"" }} - {{ pedido.cliente.uf|default_if_none:"" }}<br>
+                    <strong>Contato:</strong> {{ pedido.cliente.celular|default:pedido.cliente.telefone_fixo|formatar_telefone }}
+                </p>
+            </td>
+            <td class="pix-info">
+                {% if qrcode_base64 %}
+                    <p style="margin:0; font-weight: bold;">QRCode PIX</p>
+                    <img src="data:image/png;base64,{{ qrcode_base64 }}" alt="QRCode PIX">
+                {% elif pedido.pago %}
+                    <div class="paid-stamp">PAGO</div>
+                {% endif %}
+            </td>
+        </tr>
+    </table>
+    
+    <table class="items-table">
+        <thead>
+            <tr>
+                <th>Descrição</th>
+                <th style="width: 15%; text-align: right;">Qtd.</th>
+                <th style="width: 20%; text-align: right;">Vl. Unit.</th>
+                <th style="width: 20%; text-align: right;">Subtotal</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for item in itens_pedido %}
+            <tr>
+                <td>{{ item.item.nome }}</td>
+                <td class="qty">{{ item.quantidade|floatformat:"-3g" }}</td>
+                <td class="price">R$ {{ item.preco_unitario|localize }}</td>
+                <td class="price">R$ {{ item.subtotal|localize }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    <div class="totals">
+        <table>
+            <tr>
+                <td>Subtotal dos Itens:</td>
+                <td class="price">R$ {{ pedido.subtotal_itens|localize }}</td>
+            </tr>
+            {% if pedido.desconto_calculado > 0 %}
+            <tr>
+                <td>Desconto:</td>
+                <td class="price">- R$ {{ pedido.desconto_calculado|localize }}</td>
+            </tr>
+            {% endif %}
+            {% if pedido.taxa_entrega > 0 %}
+            <tr>
+                <td>Taxa de Entrega:</td>
+                <td class="price">+ R$ {{ pedido.taxa_entrega|localize }}</td>
+            </tr>
+            {% endif %}
+            <tr class="total-row">
+                <td>Total do Pedido:</td>
+                <td class="price">R$ {{ pedido.valor_total|localize }}</td>
+            </tr>
+        </table>
+    </div>
+
+    {% if pedido.observacoes %}
+        <table class="layout-table info-table" style="margin-top: 80px;">
+            <tr>
+                <td>
+                    <p style="margin: 0;"><strong>Observações:</strong> {{ pedido.observacoes|linebreaks }}</p>
+                </td>
+            </tr>
+        </table>
+    {% endif %}
+    <div class="cutting-line-container">
+        <hr class="cutting-line"> 
+    </div>
+</body>
+</html>

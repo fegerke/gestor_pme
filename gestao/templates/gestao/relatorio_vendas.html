@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+{% load l10n %}
+<head>
+    <meta charset="UTF-8">
+    <title>Relatório de Vendas por Período</title>
+    <style>
+        body { font-family: sans-serif; padding: 20px; }
+        .container { max-width: 800px; margin: auto; border: 1px solid #ccc; padding: 20px; border-radius: 8px; }
+        h1 { text-align: center; }
+        form label { display: inline-block; width: 100px; }
+        form input[type="date"] { padding: 5px; margin-bottom: 10px; }
+        form button { padding: 8px 15px; cursor: pointer; }
+        .resultado { margin-top: 20px; padding: 15px; background-color: #e7f3fe; border-left: 6px solid #2196F3; }
+        .resultado p { margin: 5px 0; }
+        .error { color: red; margin-top: 10px; }
+        .lista-pedidos { margin-top: 30px; }
+        .lista-pedidos h2 { border-bottom: 1px solid #ccc; padding-bottom: 5px; }
+        .pedidos-table { width: 100%; border-collapse: collapse; margin-top: 15px; }
+        .pedidos-table th, .pedidos-table td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+        .pedidos-table th { background-color: #f2f2f2; }
+        .pedidos-table td.valor { text-align: right; }
+        .pedidos-table tr:nth-child(even) { background-color: #f9f9f9; }
+        .sem-pedidos { color: #888; margin-top: 15px; }
+
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Relatório de Vendas por Período</h1>
+
+        <form method="post">
+            {% csrf_token %}
+            <div>
+                <label for="data_inicio">Data Início:</label>
+                {# Usamos type="date" para facilitar a seleção #}
+                <input type="date" id="data_inicio" name="data_inicio" value="{{ data_inicio|date:'Y-m-d' }}" required> 
+            </div>
+            <div>
+                <label for="data_fim">Data Fim:</label>
+                <input type="date" id="data_fim" name="data_fim" value="{{ data_fim|date:'Y-m-d' }}" required>
+            </div>
+            <button type="submit">Gerar Relatório</button>
+        </form>
+
+        {% if messages %}
+            {% for message in messages %}
+                <p class="error">{{ message }}</p>
+            {% endfor %}
+        {% endif %}
+
+        {% if total_vendas is not None %}
+            <div class="resultado">
+                <h2>Resultado</h2>
+                <p>Período: <strong>{{ data_inicio|date:"d/m/Y" }}</strong> a <strong>{{ data_fim|date:"d/m/Y" }}</strong></p>
+                <p>Total de Vendas (Pedidos Atendidos): <strong>R$ {{ total_vendas|floatformat:2 }}</strong></p>
+            </div>
+
+            <div class="lista-pedidos">
+                <h2>Pedidos Incluídos no Período</h2>
+                {% if pedidos_periodo %}
+                    <table class="pedidos-table">
+                        <thead>
+                            <tr>
+                                <th>Nº Pedido</th>
+                                <th>Data Emissão</th>
+                                <th>Cliente</th>
+                                <th class="valor">Valor Total</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for pedido in pedidos_periodo %}
+                            <tr>
+                                <td>
+                                    {# Link para editar o pedido no admin #}
+                                    <a href="{% url 'admin:gestao_pedido_change' pedido.id %}" target="_blank">
+                                        {{ pedido.numero_pedido }}
+                                    </a>
+                                </td>
+                                <td>{{ pedido.data_emissao|date:"d/m/Y H:i" }}</td>
+                                <td>{{ pedido.cliente.nome_razao_social }}</td>
+                                <td class="valor">R$ {{ pedido.valor_total|floatformat:2|localize }}</td> {# Adicionado localize #}
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                {% else %}
+                    <p class="sem-pedidos">Nenhum pedido atendido encontrado para o período selecionado.</p>
+                {% endif %}
+            </div>
+            
+        {% endif %}
+
+        {# Link opcional para voltar ao Admin #}
+        <p style="text-align: center; margin-top: 20px;"><a href="{% url 'admin:index' %}">Voltar ao Admin</a></p>
+
+    </div>
+</body>
+</html>

@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <title>PIX para Pedido Nº {{ pedido.numero_pedido }}</title>
+    <style>
+        body { font-family: sans-serif; text-align: center; padding: 20px; }
+        .container { max-width: 400px; margin: auto; border: 1px solid #ccc; border-radius: 8px; padding: 20px; }
+        h1 { font-size: 1.5em; }
+        textarea { width: 95%; font-size: 0.8em; padding: 10px; margin-top: 15px; }
+        button { background-color: #007bff; color: white; border: none; padding: 10px 15px; border-radius: 5px; cursor: pointer; margin-top: 10px; }
+        button:hover { background-color: #0056b3; }
+        #copy-success { color: green; font-weight: bold; display: none; margin-top: 10px; }
+        
+        /* Estilos para o bloco de debug */
+        #debug-info { 
+            text-align: left; 
+            background: #f0f0f0; 
+            border: 1px solid #ccc; 
+            padding: 10px; 
+            margin-top: 20px; 
+            font-family: monospace; 
+            word-break: break-all;
+        }
+        #debug-info h3 { text-align: center; margin-top: 0; }
+        #debug-info ul { padding-left: 20px; }
+        #debug-info pre { background: #fff; padding: 5px; border: 1px solid #ddd; }
+
+    </style>
+</head>
+<body>
+    <div class="container">
+        {% if erro %}
+            <h1>Erro</h1>
+            <p>{{ erro }}</p>
+        {% else %}
+            <h1>Pagamento PIX para o Pedido Nº {{ pedido.numero_pedido }}</h1>
+           <p>Valor: <strong>R$ {{ pedido.valor_total }}</strong></p>
+
+            <img src="data:image/png;base64,{{ qrcode_base64 }}" alt="QRCode PIX">
+
+            <p>Ou copie o código abaixo:</p>
+            <textarea id="pix-code" rows="4" readonly>{{ pix_copia_e_cola }}</textarea>
+            <br>
+            <button onclick="copyPixCode()">Copiar Código</button>
+            <p id="copy-success">Código copiado com sucesso!</p>
+
+
+            <div id="debug-info">
+                <h3>DEBUG INFO</h3>
+                <p><strong>DADOS PUROS DO BANCO:</strong></p>
+                <ul>
+                    <li><strong>raw_chave_pix:</strong> {{ debug_data.raw_chave_pix }}</li>
+                    <li><strong>raw_nome_fantasia:</strong> {{ debug_data.raw_nome_fantasia }}</li>
+                    <li><strong>raw_cidade:</strong> {{ debug_data.raw_cidade }}</li>
+                    <li><strong>pedido_valor_total:</strong> {{ debug_data.pedido_valor_total }}</li>
+                </ul>
+                <p><strong>PARÂMETROS ENVIADOS (brcode_params):</strong></p>
+                <pre>{{ debug_data.brcode_params_final }}</pre>
+                <p><strong>STRING FINAL (Copia e Cola):</strong></p>
+                <pre>{{ debug_data.pix_copia_e_cola }}</pre>
+            </div>
+            {% endif %}
+    </div>
+
+    <script>
+        function copyPixCode() {
+            const textArea = document.getElementById("pix-code");
+            textArea.select();
+            document.execCommand("copy");
+
+            const successMessage = document.getElementById("copy-success");
+            successMessage.style.display = 'block';
+            setTimeout(() => { successMessage.style.display = 'none'; }, 2000);
+        }
+    </script>
+</body>
+</html>
