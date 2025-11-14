@@ -1,10 +1,8 @@
-# Arquivo: gestao/models.py (Com campo nome_beneficiario_pix)
-
 from django.db import models
 from django.contrib.auth.models import User
 from django.db.models import Q
 import re
-from unicodedata import normalize # Importação adicionada para a limpeza do nome PIX
+from unicodedata import normalize
 
 # --- MODELO DA CONTA DO ASSINANTE ---
 class Empresa(models.Model):
@@ -33,8 +31,6 @@ class Empresa(models.Model):
     observacoes = models.TextField(blank=True, null=True)
     tipo_chave_pix = models.CharField(max_length=5, choices=TIPO_CHAVE_PIX_CHOICES, blank=True, null=True, verbose_name="Tipo de Chave PIX")
     chave_pix = models.CharField(max_length=200, blank=True, null=True, verbose_name="Chave PIX")
-    
-    # --- **** NOVO CAMPO ADICIONADO AQUI **** ---
     nome_beneficiario_pix = models.CharField(
         max_length=25,
         blank=True,
@@ -42,7 +38,6 @@ class Empresa(models.Model):
         verbose_name="Nome do Beneficiário (PIX)",
         help_text="Nome exato que aparece ao receber um PIX nesta chave (máx. 25 caracteres)."
     )
-
     data_cadastro = models.DateTimeField(auto_now_add=True)
     
     def __str__(self): return self.nome_fantasia
@@ -79,11 +74,11 @@ class Empresa(models.Model):
             elif self.tipo_chave_pix == 'ALE':
                 self.chave_pix = self.chave_pix.strip()
 
-        # --- **** LIMPEZA DO NOVO CAMPO **** ---
+        # Limpeza do nome PIX
         if self.nome_beneficiario_pix:
             s = normalize('NFD', self.nome_beneficiario_pix).encode('ascii', 'ignore').decode('utf-8')
-            s = re.sub(r'[^A-Z0-9 ]', '', s.upper()) # Permite espaços, remove acentos/especiais
-            self.nome_beneficiario_pix = s[:25].strip() # Garante limite de 25
+            s = re.sub(r'[^A-Z0-9 ]', '', s.upper())
+            self.nome_beneficiario_pix = s[:25].strip()
         
         super().save(*args, **kwargs)
 
@@ -94,6 +89,7 @@ class Empresa(models.Model):
 
 # --- MODELOS DE ORGANIZAÇÃO E PRECIFICAÇÃO ---
 class Grupo(models.Model):
+    # ... (sem alterações) ...
     empresa = models.ForeignKey(Empresa, on_delete=models.CASCADE, related_name='grupos')
     nome = models.CharField(max_length=100, verbose_name="Nome do Grupo")
     descricao = models.TextField(blank=True, null=True, verbose_name="Descrição")
@@ -101,6 +97,7 @@ class Grupo(models.Model):
     class Meta: unique_together = ('empresa', 'nome')
 
 class TabelaDePreco(models.Model):
+    # ... (sem alterações) ...
     empresa = models.ForeignKey(Empresa, on_delete=models.CASCADE, related_name='tabelas_de_preco')
     nome = models.CharField(max_length=100)
     descricao = models.TextField(blank=True, null=True)
@@ -109,6 +106,7 @@ class TabelaDePreco(models.Model):
     class Meta: unique_together = ('empresa', 'nome')
 
 class Tamanho(models.Model):
+    # ... (sem alterações) ...
     empresa = models.ForeignKey(Empresa, on_delete=models.CASCADE, related_name='tamanhos')
     descricao = models.CharField(max_length=50, help_text="Ex: 140g, 300g, Pequena, Média")
     def __str__(self): return self.descricao
@@ -116,6 +114,7 @@ class Tamanho(models.Model):
 
 # --- MODELO PRINCIPAL DE ITENS VENDÁVEIS ---
 class Item(models.Model):
+    # ... (sem alterações) ...
     empresa = models.ForeignKey(Empresa, on_delete=models.CASCADE, related_name='itens')
     TIPO_CHOICES = [('P', 'Produto'),('S', 'Serviço'),]
     nome = models.CharField(max_length=200)
@@ -141,6 +140,7 @@ class Item(models.Model):
 
 # --- MODELOS DE LIGAÇÃO DE PREÇOS (O SISTEMA HÍBRIDO) ---
 class RegraDePreco(models.Model):
+    # ... (sem alterações) ...
     empresa = models.ForeignKey(Empresa, on_delete=models.CASCADE, related_name='regras_de_preco')
     grupo = models.ForeignKey(Grupo, on_delete=models.CASCADE)
     tabela_de_preco = models.ForeignKey(TabelaDePreco, on_delete=models.CASCADE)
@@ -150,6 +150,7 @@ class RegraDePreco(models.Model):
     def __str__(self): return f"Preço para {self.grupo.nome} ({self.tamanho.descricao}) na tabela {self.tabela_de_preco.nome}"
 
 class PrecoItem(models.Model):
+    # ... (sem alterações) ...
     empresa = models.ForeignKey(Empresa, on_delete=models.CASCADE, related_name='precos_item')
     item = models.ForeignKey(Item, on_delete=models.CASCADE, related_name="precos_especificos")
     tabela_de_preco = models.ForeignKey(TabelaDePreco, on_delete=models.CASCADE)
@@ -159,6 +160,7 @@ class PrecoItem(models.Model):
 
 # --- MODELO DE CONTATOS (CLIENTES E FORNECEDORES) ---
 class Contato(models.Model):
+    # ... (sem alterações) ...
     empresa = models.ForeignKey(Empresa, on_delete=models.CASCADE, related_name='contatos')
     TIPO_PESSOA_CHOICES = [('F', 'Física'),('J', 'Jurídica'),]
     SITUACAO_CHOICES = [('Ativo', 'Ativo'),('Inativo', 'Inativo'),]
@@ -196,12 +198,22 @@ class Contato(models.Model):
 # --- MODELOS DE PEDIDO DE VENDA ---
 class Pedido(models.Model):
     empresa = models.ForeignKey(Empresa, on_delete=models.CASCADE, related_name='pedidos')
-    STATUS_CHOICES = [('A', 'Em Aberto'),('F', 'Atendido'),('C', 'Cancelado'),]
+    
+    # --- **** ALTERAÇÃO AQUI **** ---
+    STATUS_CHOICES = [
+        ('A', 'Aberto'), # Mudado de "Em Aberto"
+        ('F', 'Atendido'),
+        ('C', 'Cancelado'),
+    ]
+
     FORMA_PAGAMENTO_CHOICES = [('PIX', 'PIX'),('CAR', 'Cartão de Crédito/Débito'),('DIN', 'Dinheiro'),('OUT', 'Outro'),]
     TIPO_DESCONTO_CHOICES = [('P', 'Percentual (%)'),('V', 'Valor Fixo (R$)'),]
+
     numero_pedido = models.PositiveIntegerField(verbose_name="Número do Pedido", blank=True, null=True)
     cliente = models.ForeignKey(Contato, on_delete=models.PROTECT, limit_choices_to={'eh_cliente': True})
-    status = models.CharField(max_length=3, choices=STATUS_CHOICES, default='A')
+    
+    status = models.CharField(max_length=3, choices=STATUS_CHOICES, default='A') 
+
     tabela_de_preco = models.ForeignKey(TabelaDePreco, on_delete=models.PROTECT)
     data_emissao = models.DateTimeField(auto_now_add=True, verbose_name="Data de Emissão")
     data_entrega = models.DateField(null=True, blank=True, verbose_name="Data de Entrega")
@@ -214,24 +226,38 @@ class Pedido(models.Model):
     valor_total = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     observacoes = models.TextField(blank=True, null=True)
     pago = models.BooleanField(default=False, verbose_name="Pedido Pago?")
+
     def __str__(self): return f"Pedido Nº {self.numero_pedido} - {self.cliente.nome_razao_social}"
-    class Meta: unique_together = ('empresa', 'numero_pedido')
+    
+    class Meta:
+        unique_together = ('empresa', 'numero_pedido')
+
     def save(self, *args, **kwargs):
+        # Lógica de número de pedido
         if not self.numero_pedido and self.empresa:
             ultimo_pedido = Pedido.objects.filter(empresa=self.empresa).order_by('numero_pedido').last()
-            if ultimo_pedido and ultimo_pedido.numero_pedido:
+            if ultimo_pedido and ultimo_pedido.numero_pedido: 
                 self.numero_pedido = ultimo_pedido.numero_pedido + 1
-            else:
+            else: 
                 self.numero_pedido = 1
-        if self.pk:
+        
+        # Lógica de pagamento (IDA E VOLTA)
+        if self.pk: 
             try:
                 old_instance = Pedido.objects.get(pk=self.pk)
+                
+                # 'A' = Aberto
                 if old_instance.status == 'A' and self.status == 'F':
                     self.pago = True
+                
+                # 'A' = Aberto
                 elif old_instance.status == 'F' and self.status == 'A':
                     self.pago = False
+
             except Pedido.DoesNotExist:
-                pass
+                pass 
+        
+        # Lógica de cálculo de totais
         if self.pk:
             self.subtotal_itens = sum(item.subtotal for item in self.itens.all())
             desconto_aplicado = 0
@@ -243,9 +269,11 @@ class Pedido(models.Model):
             self.desconto_calculado = desconto_aplicado
             taxa_entrega = self.taxa_entrega or 0
             self.valor_total = self.subtotal_itens - self.desconto_calculado + taxa_entrega
+        
         super().save(*args, **kwargs)
 
 class ItemPedido(models.Model):
+    # ... (sem alterações) ...
     empresa = models.ForeignKey(Empresa, on_delete=models.CASCADE, related_name='itens_pedido')
     pedido = models.ForeignKey(Pedido, on_delete=models.CASCADE, related_name='itens')
     item = models.ForeignKey(Item, on_delete=models.PROTECT, limit_choices_to={'pode_ser_vendido': True})

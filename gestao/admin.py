@@ -1,11 +1,11 @@
-# Arquivo: gestao/admin.py (Removido td_attrs para corrigir TypeError)
+
 
 from django.contrib import admin
 from django import forms
 from django.urls import reverse
 from django.utils.html import format_html
 from django.contrib.staticfiles.storage import staticfiles_storage
-from django.db.models import Q
+from django.db.models import Q, F, Case, When # <-- Imports necessários (F, Case, When)
 
 # Import models
 from .models import (
@@ -92,9 +92,12 @@ class PedidoAdmin(admin.ModelAdmin):
     form = PedidoForm
     save_on_top = True
 
+    # --- REMOVEMOS A LINHA 'ordering' DAQUI ---
+
     list_display = (
         'get_numero_pedido',
         'get_data_emissão',
+        'get_data_entrega',
         'cliente',
         'valor_total',
         'get_pago',
@@ -105,7 +108,7 @@ class PedidoAdmin(admin.ModelAdmin):
     )
 
     list_editable = ('status',)
-    list_filter = ('status', 'pago', 'data_emissao', 'cliente')
+    list_filter = ('status', 'pago', 'data_emissao', 'data_entrega', 'cliente')
     autocomplete_fields = ['cliente']
     inlines = [ItemPedidoInline]
     readonly_fields = ('gerar_pix_button', 'imprimir_pedido_button')
@@ -118,7 +121,7 @@ class PedidoAdmin(admin.ModelAdmin):
     class Media:
         js = ('gestao/js/pedido_admin.js',)
 
-    # --- Funções Display ---
+    # --- Funções Display (sem alteração) ---
     @admin.display(description="PEDIDO")
     def get_numero_pedido(self, obj): return obj.numero_pedido
     @admin.display(description="PAGO?", boolean=True)
@@ -126,7 +129,12 @@ class PedidoAdmin(admin.ModelAdmin):
     @admin.display(description="EMISSÃO")
     def get_data_emissão(self, obj): return obj.data_emissao.strftime('%d/%m/%Y')
 
-    # --- **** REMOVIDO 'td_attrs' **** ---
+    @admin.display(description="DT ENTREGA")
+    def get_data_entrega(self, obj):
+        if obj.data_entrega:
+            return obj.data_entrega.strftime('%d/%m/%Y')
+        return "N/A"
+
     @admin.display(description="PIX")
     def gerar_pix_link(self, obj):
         if obj.forma_pagamento == 'PIX' and not obj.pago and obj.valor_total > 0:
@@ -135,25 +143,19 @@ class PedidoAdmin(admin.ModelAdmin):
             return format_html(f'<a href="{url}" target="_blank" title="Gerar PIX"><img src="{icon_url}" alt="PIX" width="16" height="16"></a>')
         return "N/A"
 
-    # --- **** REMOVIDO 'td_attrs' **** ---
     @admin.display(description="PDF")
     def imprimir_pedido_link(self, obj):
         url = reverse('gestao:imprimir_pedido_pdf', args=[obj.id])
         icon_url = staticfiles_storage.url('gestao/img/pdf.svg')
         return format_html(f'<a href="{url}" target="_blank" title="Gerar PDF"><img src="{icon_url}" alt="PDF" width="16" height="16"></a>')
 
-    # --- **** REMOVIDO 'td_attrs' **** ---
     @admin.display(description="Clonar")
     def clonar_pedido_link(self, obj):
         url = reverse('gestao:clonar_pedido', args=[obj.id])
         icon_url = staticfiles_storage.url('gestao/img/clonar.svg')
-        # target="_blank" foi removido
         return format_html(f'<a href="{url}" title="Clonar Pedido"><img src="{icon_url}" alt="Clonar" width="16" height="16"></a>')
-    # --- FIM DAS ALTERAÇÕES ---
 
-
-    # --- Funções Botão e Métodos Core (sem alterações) ---
-    # ... (copie o resto da classe PedidoAdmin do seu arquivo anterior) ...
+    # --- Funções Botão (sem alteração) ---
     def gerar_pix_button(self, obj):
         if obj.id and obj.forma_pagamento == 'PIX' and not obj.pago and obj.valor_total > 0:
             url = reverse('gestao:gerar_pix_pedido', args=[obj.id])
@@ -168,6 +170,7 @@ class PedidoAdmin(admin.ModelAdmin):
         return "Salve o pedido para poder imprimir."
     imprimir_pedido_button.short_description = "Ações do Pedido"
 
+    # --- Métodos Core ---
     def save_model(self, request, obj, form, change):
         if not obj.pk:
             user_empresa = getattr(request.user, 'empresa', None)
@@ -181,15 +184,46 @@ class PedidoAdmin(admin.ModelAdmin):
         for instance in instances:
             if isinstance(instance, ItemPedido) and not instance.pk and user_empresa:
                 instance.empresa = user_empresa
-            instance.save() # Salva individualmente
-        formset.save_m2m() # Salva ManyToMany se houver
+            instance.save()
+        formset.save_m2m()
 
+    # --- **** ALTERAÇÃO CRÍTICA: LÓGICA DE ORDENAÇÃO CORRIGIDA **** ---
     def get_queryset(self, request):
+        # 1. Obter o queryset base
         qs = super().get_queryset(request)
-        if request.user.is_superuser: return qs
+
+        # 2. Filtrar pela empresa do usuário
         user_empresa = getattr(request.user, 'empresa', None)
-        if user_empresa: return qs.filter(empresa=user_empresa)
-        return qs.none()
+        if not request.user.is_superuser:
+            if user_empresa:
+                qs = qs.filter(empresa=user_empresa)
+            else:
+                return qs.none()
+        
+        # 3. Criar as "colunas virtuais" para ordenação
+        
+        # Coluna 1: Só tem valor para status 'A' (Aberto). Ordena ASC (mais próxima primeiro)
+        ordem_abertos = Case(
+            When(status='A', then=F('data_entrega')),
+            default=None
+        ).asc(nulls_last=True) # nulls_last põe os 'C' e 'F' (que viram NULL) no fim
+
+        # Coluna 2: Só tem valor para status 'C' e 'F'. Ordena DESC (mais recente primeiro)
+        ordem_outros = Case(
+            When(status='A', then=None), # 'A' vira NULL
+            default=F('data_entrega')
+        ).desc(nulls_last=True) # nulls_last põe os 'A' (que viram NULL) no fim
+        
+        # 4. Aplicar a ordenação
+        qs = qs.order_by(
+            'status',         # 1. Agrupa por 'A', 'C', 'F'
+            ordem_abertos,    # 2. Ordena o grupo 'A' (os outros são nulos)
+            ordem_outros,     # 3. Ordena os grupos 'C' e 'F' (os 'A' são nulos)
+            '-numero_pedido'  # 4. Desempate final (mais novo primeiro)
+        )
+        
+        return qs
+    # --- FIM DA ALTERAÇÃO ---
 
     def get_changeform_initial_data(self, request):
         proximo_numero = 1
@@ -203,7 +237,6 @@ class PedidoAdmin(admin.ModelAdmin):
             'numero_pedido': proximo_numero,
             'tabela_de_preco': tabela_padrao_id
         }
-
 
 # ... (Resto do arquivo admin.py sem alterações) ...
 @admin.register(Empresa)
