@@ -3,7 +3,7 @@ from django import forms
 from django.urls import reverse
 from django.utils.html import format_html
 from django.contrib.staticfiles.storage import staticfiles_storage
-from django.db.models import Q, F, Case, When
+from django.db.models import Q, F, Case, When # <-- Imports necessários
 
 # Import models
 from .models import (
@@ -64,44 +64,34 @@ class ItemAdmin(admin.ModelAdmin):
         if user_empresa: return qs.filter(empresa=user_empresa)
         return qs.none()
 
-# --- **** ALTERAÇÕES AQUI **** ---
 @admin.register(Contato)
-class ContatoAdmin(admin.ModelAdmin): 
-    # 1. Adicionado 'apelido' aos campos de busca
-    search_fields = ('nome_razao_social', 'apelido', 'cpf', 'cnpj', 'email') 
-    
-    # 2. Adicionado 'apelido' à lista (logo após o nome)
-    list_display = ('nome_razao_social', 'apelido', 'email', 'celular', 'situacao', 'eh_cliente', 'eh_fornecedor') 
-    
-    list_filter = ('situacao', 'tipo_pessoa', 'eh_cliente', 'eh_fornecedor') 
-    
-    # 3. Adicionado 'apelido' aos campos editáveis na lista (para preenchimento rápido)
-    list_editable = ('apelido', 'situacao', 'eh_cliente', 'eh_fornecedor') 
-    
+class ContatoAdmin(admin.ModelAdmin):
+    # ... (sem alterações) ...
+    search_fields = ('nome_razao_social', 'apelido', 'cpf', 'cnpj', 'email')
+    list_display = ('nome_razao_social', 'apelido', 'email', 'celular', 'situacao', 'eh_cliente', 'eh_fornecedor')
+    list_filter = ('situacao', 'tipo_pessoa', 'eh_cliente', 'eh_fornecedor')
+    list_editable = ('apelido', 'situacao', 'eh_cliente', 'eh_fornecedor')
     class Media: js = ('gestao/js/jquery.mask.min.js', 'gestao/js/contato_admin.js',)
-
     def save_model(self, request, obj, form, change):
         if not obj.pk:
             user_empresa = getattr(request.user, 'empresa', None)
             if user_empresa:
                 obj.empresa = user_empresa
         super().save_model(request, obj, form, change)
-
     def get_queryset(self, request):
         qs = super().get_queryset(request)
         if request.user.is_superuser: return qs
         user_empresa = getattr(request.user, 'empresa', None)
         if user_empresa: return qs.filter(empresa=user_empresa)
-        return qs.none() 
-# --- FIM DAS ALTERAÇÕES ---
-
+        return qs.none()
 
 @admin.register(Pedido)
 class PedidoAdmin(admin.ModelAdmin):
-    # ... (sem alterações no PedidoAdmin) ...
     form = PedidoForm
     save_on_top = True
-    ordering = ('status', 'data_entrega', '-numero_pedido')
+
+    # --- REMOVEMOS A LINHA 'ordering' DAQUI ---
+
     list_display = (
         'get_numero_pedido',
         'get_data_emissão',
@@ -114,6 +104,7 @@ class PedidoAdmin(admin.ModelAdmin):
         'imprimir_pedido_link',
         'clonar_pedido_link',
     )
+
     list_editable = ('status',)
     list_filter = ('status', 'pago', 'data_emissao', 'data_entrega', 'cliente')
     autocomplete_fields = ['cliente']
@@ -127,17 +118,21 @@ class PedidoAdmin(admin.ModelAdmin):
     )
     class Media:
         js = ('gestao/js/pedido_admin.js',)
+
+    # --- Funções Display (sem alteração) ---
     @admin.display(description="PEDIDO")
     def get_numero_pedido(self, obj): return obj.numero_pedido
     @admin.display(description="PAGO?", boolean=True)
     def get_pago(self, obj): return obj.pago
     @admin.display(description="EMISSÃO")
     def get_data_emissão(self, obj): return obj.data_emissao.strftime('%d/%m/%Y')
+
     @admin.display(description="DT ENTREGA")
     def get_data_entrega(self, obj):
         if obj.data_entrega:
             return obj.data_entrega.strftime('%d/%m/%Y')
         return "N/A"
+
     @admin.display(description="PIX")
     def gerar_pix_link(self, obj):
         if obj.forma_pagamento == 'PIX' and not obj.pago and obj.valor_total > 0:
@@ -145,34 +140,42 @@ class PedidoAdmin(admin.ModelAdmin):
             icon_url = staticfiles_storage.url('gestao/img/pix.svg')
             return format_html(f'<a href="{url}" target="_blank" title="Gerar PIX"><img src="{icon_url}" alt="PIX" width="16" height="16"></a>')
         return "N/A"
+
     @admin.display(description="PDF")
     def imprimir_pedido_link(self, obj):
         url = reverse('gestao:imprimir_pedido_pdf', args=[obj.id])
         icon_url = staticfiles_storage.url('gestao/img/pdf.svg')
         return format_html(f'<a href="{url}" target="_blank" title="Gerar PDF"><img src="{icon_url}" alt="PDF" width="16" height="16"></a>')
+
     @admin.display(description="Clonar")
     def clonar_pedido_link(self, obj):
         url = reverse('gestao:clonar_pedido', args=[obj.id])
         icon_url = staticfiles_storage.url('gestao/img/clonar.svg')
         return format_html(f'<a href="{url}" title="Clonar Pedido"><img src="{icon_url}" alt="Clonar" width="16" height="16"></a>')
+
+    # --- Funções Botão (sem alteração) ---
     def gerar_pix_button(self, obj):
         if obj.id and obj.forma_pagamento == 'PIX' and not obj.pago and obj.valor_total > 0:
             url = reverse('gestao:gerar_pix_pedido', args=[obj.id])
             return format_html(f'<a href="{url}" target="_blank" class="button">Gerar PIX e Copia/Cola</a>')
         return "Não aplicável ou pedido já pago."
     gerar_pix_button.short_description = "Pagamento PIX"
+
     def imprimir_pedido_button(self, obj):
         if obj.id:
             url = reverse('gestao:imprimir_pedido_pdf', args=[obj.id])
             return format_html(f'<a href="{url}" target="_blank" class="button">Imprimir Pedido</a>')
         return "Salve o pedido para poder imprimir."
     imprimir_pedido_button.short_description = "Ações do Pedido"
+
+    # --- Métodos Core ---
     def save_model(self, request, obj, form, change):
         if not obj.pk:
             user_empresa = getattr(request.user, 'empresa', None)
             if user_empresa:
                 obj.empresa = user_empresa
         super().save_model(request, obj, form, change)
+
     def save_formset(self, request, form, formset, change):
         instances = formset.save(commit=False)
         user_empresa = getattr(request.user, 'empresa', None)
@@ -181,29 +184,45 @@ class PedidoAdmin(admin.ModelAdmin):
                 instance.empresa = user_empresa
             instance.save()
         formset.save_m2m()
+
+    # --- **** ALTERAÇÃO CRÍTICA: LÓGICA DE ORDENAÇÃO CORRIGIDA **** ---
     def get_queryset(self, request):
+        # 1. Obter o queryset base
         qs = super().get_queryset(request)
+
+        # 2. Filtrar pela empresa do usuário
         user_empresa = getattr(request.user, 'empresa', None)
         if not request.user.is_superuser:
             if user_empresa:
                 qs = qs.filter(empresa=user_empresa)
             else:
                 return qs.none()
+        
+        # 3. Criar as "colunas virtuais" para ordenação
+        
+        # Coluna 1: Só tem valor para status 'A' (Aberto). Ordena ASC (mais próxima primeiro)
         ordem_abertos = Case(
             When(status='A', then=F('data_entrega')),
             default=None
-        ).asc(nulls_last=True)
+        ).asc(nulls_last=True) # nulls_last põe os 'C' e 'F' (que viram NULL) no fim
+
+        # Coluna 2: Só tem valor para status 'C' e 'F'. Ordena DESC (mais recente primeiro)
         ordem_outros = Case(
-            When(status='A', then=None),
+            When(status='A', then=None), # 'A' vira NULL
             default=F('data_entrega')
-        ).desc(nulls_last=True)
+        ).desc(nulls_last=True) # nulls_last põe os 'A' (que viram NULL) no fim
+        
+        # 4. Aplicar a ordenação
         qs = qs.order_by(
-            'status',
-            ordem_abertos,
-            ordem_outros,
-            '-numero_pedido'
+            'status',         # 1. Agrupa por 'A', 'C', 'F'
+            ordem_abertos,    # 2. Ordena o grupo 'A' (os outros são nulos)
+            ordem_outros,     # 3. Ordena os grupos 'C' e 'F' (os 'A' são nulos)
+            '-numero_pedido'  # 4. Desempate final (mais novo primeiro)
         )
+        
         return qs
+    # --- FIM DA ALTERAÇÃO ---
+
     def get_changeform_initial_data(self, request):
         proximo_numero = 1
         tabela_padrao_id = 1
@@ -217,7 +236,7 @@ class PedidoAdmin(admin.ModelAdmin):
             'tabela_de_preco': tabela_padrao_id
         }
 
-# ... (Resto do arquivo admin.py sem alterações: EmpresaAdmin, GrupoAdmin, etc.) ...
+# ... (Resto do arquivo admin.py sem alterações) ...
 @admin.register(Empresa)
 class EmpresaAdmin(admin.ModelAdmin):
     list_display = ('nome_fantasia', 'dono', 'tipo_pessoa', 'cnpj', 'cpf')
