@@ -6,6 +6,7 @@ from unicodedata import normalize
 
 # --- MODELO DA CONTA DO ASSINANTE ---
 class Empresa(models.Model):
+    # ... (Sem alterações no modelo Empresa) ...
     TIPO_PESSOA_CHOICES = [('PF', 'Pessoa Física'),('PJ', 'Pessoa Jurídica'),]
     TIPO_CHAVE_PIX_CHOICES = [('CPF', 'CPF'),('CNPJ', 'CNPJ'),('CEL', 'Celular'),('EMAIL', 'E-mail'),('ALE', 'Chave Aleatória'),]
     dono = models.OneToOneField(User, on_delete=models.CASCADE, related_name='empresa')
@@ -43,14 +44,12 @@ class Empresa(models.Model):
     def __str__(self): return self.nome_fantasia
     
     def save(self, *args, **kwargs):
-        # Limpeza de campos normais
+        # ... (Lógica de save da Empresa - sem alteração) ...
         if self.telefone_fixo: self.telefone_fixo = re.sub(r'\D', '', self.telefone_fixo)
         if self.celular: self.celular = re.sub(r'\D', '', self.celular)
         if self.cpf: self.cpf = re.sub(r'\D', '', self.cpf)
         if self.cnpj: self.cnpj = re.sub(r'\D', '', self.cnpj)
         if self.uf: self.uf = self.uf.upper()
-
-        # Limpeza da Chave PIX
         if self.chave_pix:
             if self.tipo_chave_pix in ['CPF', 'CNPJ', 'CEL']:
                 numeros = re.sub(r'\D', '', self.chave_pix)
@@ -73,13 +72,10 @@ class Empresa(models.Model):
                 self.chave_pix = self.chave_pix.strip().lower()
             elif self.tipo_chave_pix == 'ALE':
                 self.chave_pix = self.chave_pix.strip()
-
-        # Limpeza do nome PIX
         if self.nome_beneficiario_pix:
             s = normalize('NFD', self.nome_beneficiario_pix).encode('ascii', 'ignore').decode('utf-8')
             s = re.sub(r'[^A-Z0-9 ]', '', s.upper())
             self.nome_beneficiario_pix = s[:25].strip()
-        
         super().save(*args, **kwargs)
 
     class Meta:
@@ -160,7 +156,6 @@ class PrecoItem(models.Model):
 
 # --- MODELO DE CONTATOS (CLIENTES E FORNECEDORES) ---
 class Contato(models.Model):
-    # ... (sem alterações) ...
     empresa = models.ForeignKey(Empresa, on_delete=models.CASCADE, related_name='contatos')
     TIPO_PESSOA_CHOICES = [('F', 'Física'),('J', 'Jurídica'),]
     SITUACAO_CHOICES = [('Ativo', 'Ativo'),('Inativo', 'Inativo'),]
@@ -168,6 +163,10 @@ class Contato(models.Model):
     eh_cliente = models.BooleanField(default=True)
     eh_fornecedor = models.BooleanField(default=False)
     nome_razao_social = models.CharField(max_length=200)
+    
+    # --- **** 1. NOVO CAMPO ADICIONADO **** ---
+    apelido = models.CharField(max_length=100, blank=True, null=True, verbose_name="Apelido/Nome da Unidade")
+    
     tipo_pessoa = models.CharField(max_length=1, choices=TIPO_PESSOA_CHOICES, blank=True, null=True)
     situacao = models.CharField(max_length=10, choices=SITUACAO_CHOICES, default='Ativo')
     data_nascimento = models.DateField(blank=True, null=True)
@@ -189,7 +188,13 @@ class Contato(models.Model):
     observacoes = models.TextField(blank=True, null=True)
     data_cadastro = models.DateTimeField(auto_now_add=True)
     data_atualizacao = models.DateTimeField(auto_now=True, null=True)
-    def __str__(self): return self.nome_razao_social
+    
+    # --- **** 2. MÉTODO __str__ ATUALIZADO **** ---
+    def __str__(self):
+        if self.apelido:
+            return f"{self.nome_razao_social} ({self.apelido})"
+        return self.nome_razao_social
+    
     class Meta:
         verbose_name = "Cliente / Fornecedor"
         verbose_name_plural = "Clientes & Fornecedores"
@@ -197,23 +202,14 @@ class Contato(models.Model):
 
 # --- MODELOS DE PEDIDO DE VENDA ---
 class Pedido(models.Model):
+    # ... (sem alterações) ...
     empresa = models.ForeignKey(Empresa, on_delete=models.CASCADE, related_name='pedidos')
-    
-    # --- **** ALTERAÇÃO AQUI **** ---
-    STATUS_CHOICES = [
-        ('A', 'Aberto'), # Mudado de "Em Aberto"
-        ('F', 'Atendido'),
-        ('C', 'Cancelado'),
-    ]
-
+    STATUS_CHOICES = [('A', 'Aberto'),('F', 'Atendido'),('C', 'Cancelado'),]
     FORMA_PAGAMENTO_CHOICES = [('PIX', 'PIX'),('CAR', 'Cartão de Crédito/Débito'),('DIN', 'Dinheiro'),('OUT', 'Outro'),]
     TIPO_DESCONTO_CHOICES = [('P', 'Percentual (%)'),('V', 'Valor Fixo (R$)'),]
-
     numero_pedido = models.PositiveIntegerField(verbose_name="Número do Pedido", blank=True, null=True)
     cliente = models.ForeignKey(Contato, on_delete=models.PROTECT, limit_choices_to={'eh_cliente': True})
-    
-    status = models.CharField(max_length=3, choices=STATUS_CHOICES, default='A') 
-
+    status = models.CharField(max_length=3, choices=STATUS_CHOICES, default='A')
     tabela_de_preco = models.ForeignKey(TabelaDePreco, on_delete=models.PROTECT)
     data_emissao = models.DateTimeField(auto_now_add=True, verbose_name="Data de Emissão")
     data_entrega = models.DateField(null=True, blank=True, verbose_name="Data de Entrega")
@@ -226,38 +222,25 @@ class Pedido(models.Model):
     valor_total = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     observacoes = models.TextField(blank=True, null=True)
     pago = models.BooleanField(default=False, verbose_name="Pedido Pago?")
-
     def __str__(self): return f"Pedido Nº {self.numero_pedido} - {self.cliente.nome_razao_social}"
-    
-    class Meta:
-        unique_together = ('empresa', 'numero_pedido')
-
+    class Meta: unique_together = ('empresa', 'numero_pedido')
     def save(self, *args, **kwargs):
-        # Lógica de número de pedido
+        # ... (Lógica de save do Pedido - sem alteração) ...
         if not self.numero_pedido and self.empresa:
             ultimo_pedido = Pedido.objects.filter(empresa=self.empresa).order_by('numero_pedido').last()
             if ultimo_pedido and ultimo_pedido.numero_pedido: 
                 self.numero_pedido = ultimo_pedido.numero_pedido + 1
             else: 
                 self.numero_pedido = 1
-        
-        # Lógica de pagamento (IDA E VOLTA)
         if self.pk: 
             try:
                 old_instance = Pedido.objects.get(pk=self.pk)
-                
-                # 'A' = Aberto
                 if old_instance.status == 'A' and self.status == 'F':
                     self.pago = True
-                
-                # 'A' = Aberto
                 elif old_instance.status == 'F' and self.status == 'A':
                     self.pago = False
-
             except Pedido.DoesNotExist:
                 pass 
-        
-        # Lógica de cálculo de totais
         if self.pk:
             self.subtotal_itens = sum(item.subtotal for item in self.itens.all())
             desconto_aplicado = 0
@@ -269,7 +252,6 @@ class Pedido(models.Model):
             self.desconto_calculado = desconto_aplicado
             taxa_entrega = self.taxa_entrega or 0
             self.valor_total = self.subtotal_itens - self.desconto_calculado + taxa_entrega
-        
         super().save(*args, **kwargs)
 
 class ItemPedido(models.Model):
