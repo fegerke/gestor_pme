@@ -3,7 +3,7 @@ from django import forms
 from django.urls import reverse
 from django.utils.html import format_html
 from django.contrib.staticfiles.storage import staticfiles_storage
-from django.db.models import Q, F, Case, When # <-- Imports necessários
+from django.db.models import Q, F, Case, When
 
 # Import models
 from .models import (
@@ -37,7 +37,6 @@ class PedidoForm(forms.ModelForm):
 # --- ADMINS ---
 @admin.register(Item)
 class ItemAdmin(admin.ModelAdmin):
-    # ... (sem alterações) ...
     search_fields = ('nome', 'codigo_sku')
     list_display = ('nome', 'grupo', 'tamanho', 'tipo_item', 'estoque_atual', 'pode_ser_vendido')
     list_filter = ('tipo_item', 'grupo', 'pode_ser_vendido', 'pode_ser_comprado')
@@ -66,7 +65,6 @@ class ItemAdmin(admin.ModelAdmin):
 
 @admin.register(Contato)
 class ContatoAdmin(admin.ModelAdmin):
-    # ... (sem alterações) ...
     search_fields = ('nome_razao_social', 'apelido', 'cpf', 'cnpj', 'email')
     list_display = ('nome_razao_social', 'apelido', 'email', 'celular', 'situacao', 'eh_cliente', 'eh_fornecedor')
     list_filter = ('situacao', 'tipo_pessoa', 'eh_cliente', 'eh_fornecedor')
@@ -89,8 +87,12 @@ class ContatoAdmin(admin.ModelAdmin):
 class PedidoAdmin(admin.ModelAdmin):
     form = PedidoForm
     save_on_top = True
-
-    # --- REMOVEMOS A LINHA 'ordering' DAQUI ---
+    
+    # --- **** ALTERAÇÃO AQUI: BARRA DE PESQUISA **** ---
+    # Permite buscar pelo nome ou apelido do cliente (usando __ para acessar o relacionamento)
+    # e também pelo número do pedido.
+    search_fields = ('cliente__nome_razao_social', 'cliente__apelido', 'numero_pedido')
+    # --- FIM DA ALTERAÇÃO ---
 
     list_display = (
         'get_numero_pedido',
@@ -119,7 +121,6 @@ class PedidoAdmin(admin.ModelAdmin):
     class Media:
         js = ('gestao/js/pedido_admin.js',)
 
-    # --- Funções Display (sem alteração) ---
     @admin.display(description="PEDIDO")
     def get_numero_pedido(self, obj): return obj.numero_pedido
     @admin.display(description="PAGO?", boolean=True)
@@ -153,7 +154,6 @@ class PedidoAdmin(admin.ModelAdmin):
         icon_url = staticfiles_storage.url('gestao/img/clonar.svg')
         return format_html(f'<a href="{url}" title="Clonar Pedido"><img src="{icon_url}" alt="Clonar" width="16" height="16"></a>')
 
-    # --- Funções Botão (sem alteração) ---
     def gerar_pix_button(self, obj):
         if obj.id and obj.forma_pagamento == 'PIX' and not obj.pago and obj.valor_total > 0:
             url = reverse('gestao:gerar_pix_pedido', args=[obj.id])
@@ -168,7 +168,6 @@ class PedidoAdmin(admin.ModelAdmin):
         return "Salve o pedido para poder imprimir."
     imprimir_pedido_button.short_description = "Ações do Pedido"
 
-    # --- Métodos Core ---
     def save_model(self, request, obj, form, change):
         if not obj.pk:
             user_empresa = getattr(request.user, 'empresa', None)
@@ -185,12 +184,8 @@ class PedidoAdmin(admin.ModelAdmin):
             instance.save()
         formset.save_m2m()
 
-    # --- **** ALTERAÇÃO CRÍTICA: LÓGICA DE ORDENAÇÃO CORRIGIDA **** ---
     def get_queryset(self, request):
-        # 1. Obter o queryset base
         qs = super().get_queryset(request)
-
-        # 2. Filtrar pela empresa do usuário
         user_empresa = getattr(request.user, 'empresa', None)
         if not request.user.is_superuser:
             if user_empresa:
@@ -198,30 +193,23 @@ class PedidoAdmin(admin.ModelAdmin):
             else:
                 return qs.none()
         
-        # 3. Criar as "colunas virtuais" para ordenação
-        
-        # Coluna 1: Só tem valor para status 'A' (Aberto). Ordena ASC (mais próxima primeiro)
         ordem_abertos = Case(
             When(status='A', then=F('data_entrega')),
             default=None
-        ).asc(nulls_last=True) # nulls_last põe os 'C' e 'F' (que viram NULL) no fim
+        ).asc(nulls_last=True)
 
-        # Coluna 2: Só tem valor para status 'C' e 'F'. Ordena DESC (mais recente primeiro)
         ordem_outros = Case(
-            When(status='A', then=None), # 'A' vira NULL
+            When(status='A', then=None),
             default=F('data_entrega')
-        ).desc(nulls_last=True) # nulls_last põe os 'A' (que viram NULL) no fim
+        ).desc(nulls_last=True)
         
-        # 4. Aplicar a ordenação
         qs = qs.order_by(
-            'status',         # 1. Agrupa por 'A', 'C', 'F'
-            ordem_abertos,    # 2. Ordena o grupo 'A' (os outros são nulos)
-            ordem_outros,     # 3. Ordena os grupos 'C' e 'F' (os 'A' são nulos)
-            '-numero_pedido'  # 4. Desempate final (mais novo primeiro)
+            'status',
+            ordem_abertos,
+            ordem_outros,
+            '-numero_pedido'
         )
-        
         return qs
-    # --- FIM DA ALTERAÇÃO ---
 
     def get_changeform_initial_data(self, request):
         proximo_numero = 1
@@ -236,7 +224,7 @@ class PedidoAdmin(admin.ModelAdmin):
             'tabela_de_preco': tabela_padrao_id
         }
 
-# ... (Resto do arquivo admin.py sem alterações) ...
+# ... (Resto do arquivo admin.py sem alterações: EmpresaAdmin, GrupoAdmin, etc.) ...
 @admin.register(Empresa)
 class EmpresaAdmin(admin.ModelAdmin):
     list_display = ('nome_fantasia', 'dono', 'tipo_pessoa', 'cnpj', 'cpf')
