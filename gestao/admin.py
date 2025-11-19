@@ -4,6 +4,7 @@ from django.urls import reverse
 from django.utils.html import format_html
 from django.contrib.staticfiles.storage import staticfiles_storage
 from django.db.models import Q, F, Case, When
+from datetime import date # <-- **** IMPORTAÇÃO NECESSÁRIA ****
 
 # Import models
 from .models import (
@@ -87,12 +88,9 @@ class ContatoAdmin(admin.ModelAdmin):
 class PedidoAdmin(admin.ModelAdmin):
     form = PedidoForm
     save_on_top = True
-    
-    # --- **** ALTERAÇÃO AQUI: BARRA DE PESQUISA **** ---
-    # Permite buscar pelo nome ou apelido do cliente (usando __ para acessar o relacionamento)
-    # e também pelo número do pedido.
+
+    # Busca por nome, apelido ou número
     search_fields = ('cliente__nome_razao_social', 'cliente__apelido', 'numero_pedido')
-    # --- FIM DA ALTERAÇÃO ---
 
     list_display = (
         'get_numero_pedido',
@@ -121,6 +119,7 @@ class PedidoAdmin(admin.ModelAdmin):
     class Media:
         js = ('gestao/js/pedido_admin.js',)
 
+    # --- Funções Display ---
     @admin.display(description="PEDIDO")
     def get_numero_pedido(self, obj): return obj.numero_pedido
     @admin.display(description="PAGO?", boolean=True)
@@ -128,11 +127,39 @@ class PedidoAdmin(admin.ModelAdmin):
     @admin.display(description="EMISSÃO")
     def get_data_emissão(self, obj): return obj.data_emissao.strftime('%d/%m/%Y')
 
+    # --- **** LÓGICA DE CORES AQUI **** ---
     @admin.display(description="DT ENTREGA")
     def get_data_entrega(self, obj):
         if obj.data_entrega:
-            return obj.data_entrega.strftime('%d/%m/%Y')
+            data_fmt = obj.data_entrega.strftime('%d/%m/%Y')
+            
+            # Se o pedido já foi atendido ou cancelado, mostra normal (preto)
+            if obj.status in ['F', 'C']:
+                return data_fmt
+
+            # Se está ABERTO ('A'), aplicamos as cores
+            hoje = date.today()
+            dias_restantes = (obj.data_entrega - hoje).days
+
+            cor = 'black' # Padrão
+            peso = 'normal'
+            
+            if dias_restantes > 15:
+                cor = 'green' # Verde (Tranquilo)
+            elif 3 <= dias_restantes <= 15:
+                cor = '#FF8C00' # Laranja Escuro (Atenção) - Amarelo é ilegível
+                peso = 'bold'
+            elif dias_restantes >= 0:
+                cor = 'red' # Vermelho (Urgente: Hoje, Amanhã ou Depois)
+                peso = 'bold'
+            else:
+                cor = '#8B0000' # Vermelho Sangue (ATRASADO)
+                peso = 'bold'
+                data_fmt += " (!)" # Adiciona um alerta visual
+
+            return format_html('<span style="color: {}; font-weight: {};">{}</span>', cor, peso, data_fmt)
         return "N/A"
+    # --- FIM DA LÓGICA DE CORES ---
 
     @admin.display(description="PIX")
     def gerar_pix_link(self, obj):
@@ -154,6 +181,7 @@ class PedidoAdmin(admin.ModelAdmin):
         icon_url = staticfiles_storage.url('gestao/img/clonar.svg')
         return format_html(f'<a href="{url}" title="Clonar Pedido"><img src="{icon_url}" alt="Clonar" width="16" height="16"></a>')
 
+    # --- Funções Botão e Métodos Core ---
     def gerar_pix_button(self, obj):
         if obj.id and obj.forma_pagamento == 'PIX' and not obj.pago and obj.valor_total > 0:
             url = reverse('gestao:gerar_pix_pedido', args=[obj.id])
@@ -184,6 +212,7 @@ class PedidoAdmin(admin.ModelAdmin):
             instance.save()
         formset.save_m2m()
 
+    # Ordenação Condicional (Mantida)
     def get_queryset(self, request):
         qs = super().get_queryset(request)
         user_empresa = getattr(request.user, 'empresa', None)
@@ -224,7 +253,7 @@ class PedidoAdmin(admin.ModelAdmin):
             'tabela_de_preco': tabela_padrao_id
         }
 
-# ... (Resto do arquivo admin.py sem alterações: EmpresaAdmin, GrupoAdmin, etc.) ...
+# ... (Resto do arquivo admin.py sem alterações) ...
 @admin.register(Empresa)
 class EmpresaAdmin(admin.ModelAdmin):
     list_display = ('nome_fantasia', 'dono', 'tipo_pessoa', 'cnpj', 'cpf')
