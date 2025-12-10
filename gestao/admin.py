@@ -4,7 +4,7 @@ from django.urls import reverse
 from django.utils.html import format_html
 from django.contrib.staticfiles.storage import staticfiles_storage
 from django.db.models import Q, F, Case, When
-from datetime import date # <-- **** IMPORTAÇÃO NECESSÁRIA ****
+from datetime import date
 
 # Import models
 from .models import (
@@ -56,7 +56,13 @@ class ItemAdmin(admin.ModelAdmin):
             if isinstance(obj, PrecoItem) and not obj.pk and user_empresa:
                  obj.empresa = user_empresa
             obj.save()
+        
+        # Correção para deletar itens marcados no inline de PrecoItem
+        for obj in formset.deleted_objects:
+            obj.delete()
+
         formset.save_m2m()
+        
     def get_queryset(self, request):
         qs = super().get_queryset(request)
         if request.user.is_superuser: return qs
@@ -89,7 +95,6 @@ class PedidoAdmin(admin.ModelAdmin):
     form = PedidoForm
     save_on_top = True
 
-    # Busca por nome, apelido ou número
     search_fields = ('cliente__nome_razao_social', 'cliente__apelido', 'numero_pedido')
 
     list_display = (
@@ -127,39 +132,35 @@ class PedidoAdmin(admin.ModelAdmin):
     @admin.display(description="EMISSÃO")
     def get_data_emissão(self, obj): return obj.data_emissao.strftime('%d/%m/%Y')
 
-    # --- **** LÓGICA DE CORES AQUI **** ---
     @admin.display(description="DT ENTREGA")
     def get_data_entrega(self, obj):
         if obj.data_entrega:
             data_fmt = obj.data_entrega.strftime('%d/%m/%Y')
             
-            # Se o pedido já foi atendido ou cancelado, mostra normal (preto)
             if obj.status in ['F', 'C']:
                 return data_fmt
 
-            # Se está ABERTO ('A'), aplicamos as cores
             hoje = date.today()
             dias_restantes = (obj.data_entrega - hoje).days
 
-            cor = 'black' # Padrão
+            cor = 'black'
             peso = 'normal'
             
             if dias_restantes > 15:
-                cor = 'green' # Verde (Tranquilo)
+                cor = 'green'
             elif 3 <= dias_restantes <= 15:
-                cor = '#FF8C00' # Laranja Escuro (Atenção) - Amarelo é ilegível
+                cor = '#FF8C00'
                 peso = 'bold'
             elif dias_restantes >= 0:
-                cor = 'red' # Vermelho (Urgente: Hoje, Amanhã ou Depois)
+                cor = 'red'
                 peso = 'bold'
             else:
-                cor = '#8B0000' # Vermelho Sangue (ATRASADO)
+                cor = '#8B0000'
                 peso = 'bold'
-                data_fmt += " (!)" # Adiciona um alerta visual
+                data_fmt += " (!)"
 
             return format_html('<span style="color: {}; font-weight: {};">{}</span>', cor, peso, data_fmt)
         return "N/A"
-    # --- FIM DA LÓGICA DE CORES ---
 
     @admin.display(description="PIX")
     def gerar_pix_link(self, obj):
@@ -203,16 +204,24 @@ class PedidoAdmin(admin.ModelAdmin):
                 obj.empresa = user_empresa
         super().save_model(request, obj, form, change)
 
+    # --- **** A CORREÇÃO ESTÁ AQUI **** ---
     def save_formset(self, request, form, formset, change):
+        # 1. Salva mas não envia pro banco ainda (commit=False)
         instances = formset.save(commit=False)
+        
         user_empresa = getattr(request.user, 'empresa', None)
         for instance in instances:
             if isinstance(instance, ItemPedido) and not instance.pk and user_empresa:
                 instance.empresa = user_empresa
             instance.save()
+            
+        # 2. O PULO DO GATO: Deletar os objetos marcados para remoção
+        for obj in formset.deleted_objects:
+            obj.delete()
+            
         formset.save_m2m()
+    # --- FIM DA CORREÇÃO ---
 
-    # Ordenação Condicional (Mantida)
     def get_queryset(self, request):
         qs = super().get_queryset(request)
         user_empresa = getattr(request.user, 'empresa', None)
