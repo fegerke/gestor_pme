@@ -16,7 +16,7 @@ E:
 
 :: 4. Navega para a pasta exata do projeto
 ECHO Acessando a pasta do projeto...
-cd "E:\Meus Documentos\Dropbox\Frank\git_gestor_pme"
+cd "E:\Meus Documentos\Dropbox\Frank\SISTEMAS\gestor_pme\git_gestor_pme"
 
 :: 5. Inicia o navegador na tela de admin (o & no final faz ele rodar em paralelo)
 ECHO Abrindo o navegador em http://127.0.0.1:8000/admin/
