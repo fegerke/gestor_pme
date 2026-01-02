@@ -3,7 +3,6 @@ from django.http import HttpResponse, JsonResponse
 from django.template.loader import render_to_string
 from weasyprint import HTML
 from .models import Pedido, Empresa, Item, PrecoItem, RegraDePreco, ItemPedido
-from brcode import QR
 import qrcode
 import base64
 from io import BytesIO
