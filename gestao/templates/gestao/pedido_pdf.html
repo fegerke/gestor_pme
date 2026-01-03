@@ -71,14 +71,21 @@
             <td class="company-details">
                 <strong style="font-size: 14pt;">{{ empresa.nome_fantasia }}</strong><br>
                 <span>
-                    <img src="{% static 'gestao/img/whatsapp.svg' %}" class="icon">
+                    {% if whatsapp_b64 %}
+                        <img src="data:image/svg+xml;base64,{{ whatsapp_b64 }}" class="icon">
+                    {% else %}
+                        <img src="{% static 'gestao/img/whatsapp.svg' %}" class="icon">
+                    {% endif %}
                     {{ empresa.celular|default:empresa.telefone_fixo|formatar_telefone }}
                 </span><br>
                 <span>
-                    <img src="{% static 'gestao/img/instagram.svg' %}" class="icon">
+                    {% if instagram_b64 %}
+                        <img src="data:image/svg+xml;base64,{{ instagram_b64 }}" class="icon">
+                    {% else %}
+                        <img src="{% static 'gestao/img/instagram.svg' %}" class="icon">
+                    {% endif %}
                     {{ empresa.rede_social }}
                 </span>
-            </td>
         </tr>
     </table>
 

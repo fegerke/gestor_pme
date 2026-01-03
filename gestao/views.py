@@ -15,7 +15,8 @@ from django.contrib import messages
 from django.db.models import Sum
 from django.utils.dateparse import parse_date
 from datetime import date
-import os  # <--- Adicionado para manipular caminhos de arquivo
+import os
+from django.contrib.staticfiles import finders # <--- Importação nova para achar os ícones
 
 def home(request):
     return HttpResponse("Sistema Funcionando!")
@@ -110,6 +111,18 @@ def gerar_pix_pedido(request, pedido_id):
         context = {'erro': 'Empresa ou Chave PIX não configurada.'}
     return render(request, 'gestao/gerar_pix.html', context)
 
+# Função auxiliar para converter arquivos estáticos em Base64
+def get_static_base64(path):
+    try:
+        # Tenta encontrar o arquivo no sistema
+        abs_path = finders.find(path)
+        if abs_path:
+            with open(abs_path, 'rb') as f:
+                return base64.b64encode(f.read()).decode('utf-8')
+    except Exception as e:
+        print(f"Erro ao carregar estatico {path}: {e}")
+    return None
+
 def imprimir_pedido_pdf(request, pedido_id):
     pedido = get_object_or_404(Pedido, pk=pedido_id)
     empresa = Empresa.objects.first()
@@ -125,25 +138,29 @@ def imprimir_pedido_pdf(request, pedido_id):
             qr_img.save(buffer, format='PNG')
             qrcode_base64 = base64.b64encode(buffer.getvalue()).decode('utf-8')
 
-    # --- NOVO: Lógica para carregar o Logo como Base64 (Evita erro de memória no Render) ---
+    # Lógica do Logo Principal
     logo_base64 = None
     if empresa and empresa.logo:
         try:
-            # Tenta pegar o caminho físico do arquivo
             path = empresa.logo.path
             with open(path, "rb") as image_file:
                 logo_base64 = base64.b64encode(image_file.read()).decode('utf-8')
         except Exception as e:
-            # Se der erro (ex: arquivo não existe localmente), segue sem logo ou usa URL
             print(f"Erro ao converter logo para base64: {e}")
-    # ---------------------------------------------------------------------------------------
+
+    # --- NOVO: Lógica para ícones estáticos (WhatsApp e Instagram) ---
+    whatsapp_b64 = get_static_base64('gestao/img/whatsapp.svg')
+    instagram_b64 = get_static_base64('gestao/img/instagram.svg')
+    # -----------------------------------------------------------------
 
     context = {
         'pedido': pedido, 
         'empresa': empresa, 
         'itens_pedido': itens_pedido, 
         'qrcode_base64': qrcode_base64,
-        'logo_base64': logo_base64  # <--- Enviando a nova variável para o HTML
+        'logo_base64': logo_base64,
+        'whatsapp_b64': whatsapp_b64, # Enviando ícone whats
+        'instagram_b64': instagram_b64 # Enviando ícone insta
     }
     
     html_string = render_to_string('gestao/pedido_pdf.html', context)
