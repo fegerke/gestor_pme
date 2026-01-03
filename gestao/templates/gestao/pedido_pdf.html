@@ -60,8 +60,14 @@
     <table class="layout-table header-table">
         <tr>
             <td style="width: 50%;">
-                {% if empresa.logo %}<img src="{{ empresa.logo.url }}" class="logo">{% else %}<h1 style="font-size: 18pt; font-weight: bold;">{{ empresa.nome_fantasia }}</h1>{% endif %}
-            </td>
+                {% if logo_base64 %}
+                    <img src="data:image/png;base64,{{ logo_base64 }}" class="logo">
+                {% elif empresa.logo %}
+                    <img src="{{ empresa.logo.url }}" class="logo">
+                {% else %}
+                    <h1 style="font-size: 18pt; font-weight: bold;">{{ empresa.nome_fantasia }}</h1>
+                {% endif %}
+                </td>
             <td class="company-details">
                 <strong style="font-size: 14pt;">{{ empresa.nome_fantasia }}</strong><br>
                 <span>
