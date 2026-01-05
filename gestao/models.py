@@ -235,10 +235,10 @@ class Pedido(models.Model):
         if self.pk: 
             try:
                 old_instance = Pedido.objects.get(pk=self.pk)
-                if old_instance.status == 'A' and self.status == 'F':
-                    self.pago = True
-                elif old_instance.status == 'F' and self.status == 'A':
-                    self.pago = False
+ #               if old_instance.status == 'A' and self.status == 'F':
+ #                  self.pago = True
+ #               elif old_instance.status == 'F' and self.status == 'A':
+ #                   self.pago = False
             except Pedido.DoesNotExist:
                 pass 
         if self.pk:

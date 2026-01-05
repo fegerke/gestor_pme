@@ -12,11 +12,13 @@ gunicorn==23.0.0
 packaging==25.0
 pillow==12.0.0
 pixqrcodegen==0.9.1
+psycopg2==2.9.11
 psycopg2-binary==2.9.10
 pycparser==2.23
 pydyf==0.11.0
 pyphen==0.17.2
 python-brcode==0.2.0
+python-dotenv==1.2.1
 qrcode==8.2
 sqlparse==0.5.3
 tinycss2==1.4.0

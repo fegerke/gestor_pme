@@ -1,78 +1,81 @@
-<!DOCTYPE html>
-<html lang="pt-br">
-<head>
-    <meta charset="UTF-8">
-    <title>PIX para Pedido Nº {{ pedido.numero_pedido }}</title>
-    <style>
-        body { font-family: sans-serif; text-align: center; padding: 20px; }
-        .container { max-width: 400px; margin: auto; border: 1px solid #ccc; border-radius: 8px; padding: 20px; }
-        h1 { font-size: 1.5em; }
-        textarea { width: 95%; font-size: 0.8em; padding: 10px; margin-top: 15px; }
-        button { background-color: #007bff; color: white; border: none; padding: 10px 15px; border-radius: 5px; cursor: pointer; margin-top: 10px; }
-        button:hover { background-color: #0056b3; }
-        #copy-success { color: green; font-weight: bold; display: none; margin-top: 10px; }
-        
-        /* Estilos para o bloco de debug */
-        #debug-info { 
-            text-align: left; 
-            background: #f0f0f0; 
-            border: 1px solid #ccc; 
-            padding: 10px; 
-            margin-top: 20px; 
-            font-family: monospace; 
-            word-break: break-all;
-        }
-        #debug-info h3 { text-align: center; margin-top: 0; }
-        #debug-info ul { padding-left: 20px; }
-        #debug-info pre { background: #fff; padding: 5px; border: 1px solid #ddd; }
+{% extends 'gestao/base.html' %}
+{% load l10n %}
 
-    </style>
-</head>
-<body>
-    <div class="container">
-        {% if erro %}
-            <h1>Erro</h1>
-            <p>{{ erro }}</p>
-        {% else %}
-            <h1>Pagamento PIX para o Pedido Nº {{ pedido.numero_pedido }}</h1>
-           <p>Valor: <strong>R$ {{ pedido.valor_total }}</strong></p>
+{% block title %}Pagamento PIX - Pedido #{{ pedido.numero_pedido }}{% endblock %}
 
-            <img src="data:image/png;base64,{{ qrcode_base64 }}" alt="QRCode PIX">
+{% block content %}
+<div class="container d-flex justify-content-center align-items-center" style="min-height: 80vh;">
+    <div class="card shadow-lg border-0" style="max-width: 500px; width: 100%; border-radius: 15px;">
+        <div class="card-header bg-success text-white text-center py-4" style="border-radius: 15px 15px 0 0;">
+            <i class="fas fa-qrcode fa-3x mb-2"></i>
+            <h4 class="mb-0 fw-bold">Pagamento via PIX</h4>
+            <p class="mb-0 opacity-75">Pedido Nº {{ pedido.numero_pedido }}</p>
+        </div>
 
-            <p>Ou copie o código abaixo:</p>
-            <textarea id="pix-code" rows="4" readonly>{{ pix_copia_e_cola }}</textarea>
-            <br>
-            <button onclick="copyPixCode()">Copiar Código</button>
-            <p id="copy-success">Código copiado com sucesso!</p>
-
-
-            <div id="debug-info">
-                <h3>DEBUG INFO</h3>
-                <p><strong>DADOS PUROS DO BANCO:</strong></p>
-                <ul>
-                    <li><strong>raw_chave_pix:</strong> {{ debug_data.raw_chave_pix }}</li>
-                    <li><strong>raw_nome_fantasia:</strong> {{ debug_data.raw_nome_fantasia }}</li>
-                    <li><strong>raw_cidade:</strong> {{ debug_data.raw_cidade }}</li>
-                    <li><strong>pedido_valor_total:</strong> {{ debug_data.pedido_valor_total }}</li>
-                </ul>
-                <p><strong>PARÂMETROS ENVIADOS (brcode_params):</strong></p>
-                <pre>{{ debug_data.brcode_params_final }}</pre>
-                <p><strong>STRING FINAL (Copia e Cola):</strong></p>
-                <pre>{{ debug_data.pix_copia_e_cola }}</pre>
+        <div class="card-body p-4 text-center">
+            
+            <div class="mb-4">
+                <p class="text-muted text-uppercase small mb-1">Valor a Pagar</p>
+                <h1 class="display-4 fw-bold text-success">R$ {{ pedido.valor_total|localize }}</h1>
             </div>
-            {% endif %}
+
+            <div class="p-3 bg-light rounded border d-inline-block mb-4">
+                {% if qrcode_base64 %}
+                    <img src="data:image/png;base64,{{ qrcode_base64 }}" alt="QR Code PIX" style="width: 250px; height: 250px;">
+                {% else %}
+                    <p class="text-danger">Erro ao gerar QR Code.</p>
+                {% endif %}
+            </div>
+
+            <div class="mb-3 text-start">
+                <label class="form-label small text-muted fw-bold">Pix Copia e Cola:</label>
+                <div class="input-group">
+                    <input type="text" class="form-control bg-light" id="pix-code" value="{{ pix_copia_e_cola }}" readonly>
+                    <button class="btn btn-outline-primary" type="button" onclick="copiarPix()">
+                        <i class="fas fa-copy"></i> Copiar
+                    </button>
+                </div>
+                <div id="copy-feedback" class="form-text text-success fw-bold mt-2" style="opacity: 0; transition: opacity 0.3s;">
+                    <i class="fas fa-check"></i> Código copiado com sucesso!
+                </div>
+            </div>
+
+            <div class="alert alert-light border mt-4 text-start small">
+                <ol class="mb-0 ps-3">
+                    <li>Abra o app do seu banco.</li>
+                    <li>Escolha a opção <strong>PIX</strong> > <strong>Pagar com QR Code</strong> ou <strong>Copia e Cola</strong>.</li>
+                    <li>Confirme os dados e o valor.</li>
+                </ol>
+            </div>
+        </div>
+
+        <div class="card-footer bg-white text-center py-3 border-0">
+            <button onclick="window.close()" class="btn btn-link text-muted text-decoration-none">Fechar Janela</button>
+        </div>
     </div>
+</div>
 
-    <script>
-        function copyPixCode() {
-            const textArea = document.getElementById("pix-code");
-            textArea.select();
-            document.execCommand("copy");
+<script>
+    function copiarPix() {
+        var copyText = document.getElementById("pix-code");
+        
+        // Seleciona o texto (para mobile e PC)
+        copyText.select();
+        copyText.setSelectionRange(0, 99999); // Para mobile
 
-            const successMessage = document.getElementById("copy-success");
-            successMessage.style.display = 'block';
-            setTimeout(() => { successMessage.style.display = 'none'; }, 2000);
-        }
-    </script>
-</body>
-</html>
+        // Copia para a área de transferência
+        navigator.clipboard.writeText(copyText.value).then(function() {
+            // Mostra mensagem de sucesso
+            var feedback = document.getElementById("copy-feedback");
+            feedback.style.opacity = "1";
+            
+            // Esconde mensagem depois de 3 segundos
+            setTimeout(function(){ 
+                feedback.style.opacity = "0"; 
+            }, 3000);
+        }, function(err) {
+            alert('Não foi possível copiar automaticamente. Por favor, selecione e copie manualmente.');
+        });
+    }
+</script>
+{% endblock %}

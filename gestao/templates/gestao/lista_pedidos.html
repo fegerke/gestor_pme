@@ -1,0 +1,266 @@
+{% extends 'gestao/base.html' %}
+{% load static %}
+{% load gestao_extras %} 
+
+{% block header %}Gerenciar Pedidos{% endblock %}
+
+{% block content %}
+<form method="POST" action="{% url 'gestao:acao_em_massa' %}" id="form-massa">
+    {% csrf_token %}
+    
+    <div class="card shadow-sm border-0">
+        <div class="card-header bg-white py-3">
+            <div class="row align-items-center g-2">
+                
+                <div class="col-md-4 d-flex align-items-center">
+                    <div class="input-group input-group-sm w-auto me-2">
+                        <span class="input-group-text bg-light fw-bold">Ação:</span>
+                        <select name="acao" class="form-select form-select-sm" style="max-width: 150px;">
+                            <option value="">---------</option>
+                            <option value="delete">Apagar Selecionados</option>
+                        </select>
+                        <button type="submit" class="btn btn-outline-danger btn-sm" onclick="return confirm('Tem certeza que deseja apagar os itens selecionados?')">Ir</button>
+                    </div>
+                    <span class="text-muted small ms-2" id="contador-selecao">0 selecionados</span>
+                </div>
+
+                <div class="col-md-4 text-center">
+                     <a href="{% url 'gestao:lista_pedidos' %}" class="badge rounded-pill text-decoration-none {% if not status_filter %}bg-dark{% else %}bg-secondary{% endif %} p-2 px-3 me-1">Todos</a>
+                     <a href="?status=A" class="badge rounded-pill text-decoration-none {% if status_filter == 'A' %}bg-warning text-dark{% else %}bg-light text-dark border{% endif %} p-2 px-3 me-1">Pendentes</a>
+                     <a href="?status=F" class="badge rounded-pill text-decoration-none {% if status_filter == 'F' %}bg-success{% else %}bg-light text-dark border{% endif %} p-2 px-3">Faturados</a>
+                </div>
+
+                <div class="col-md-4 text-end">
+                    <a href="{% url 'gestao:pedido_novo' %}" class="btn btn-primary btn-sm"><i class="fas fa-plus"></i> Novo Pedido</a>
+                </div>
+            </div>
+
+            <div class="mt-3">
+                <div class="input-group">
+                    <input type="text" name="q" class="form-control" placeholder="Buscar por Cliente, Apelido ou Nº..." value="{{ request.GET.q|default:'' }}" form="form-busca">
+                    <button type="submit" class="btn btn-outline-primary" form="form-busca"><i class="fas fa-search"></i> Pesquisar</button>
+                    {% if request.GET.q or request.GET.status %}
+                        <a href="{% url 'gestao:lista_pedidos' %}" class="btn btn-outline-secondary"><i class="fas fa-times"></i> Limpar</a>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                    <thead class="bg-light">
+                        <tr>
+                            <th class="ps-3" style="width: 40px;"><input type="checkbox" class="form-check-input" id="select-all"></th>
+                            <th>Pedido</th>
+                            <th>Emissão</th>
+                            <th>Dt. Entrega</th>
+                            <th>Cliente</th>
+                            <th>Valor Total</th>
+                            <th class="text-center" style="width: 80px;">Pago?</th>
+                            <th class="text-center">Status</th>
+                            <th class="text-end pe-3">Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for pedido in pedidos %}
+                        <tr id="linha-{{ pedido.id }}" style="{% if pedido.status == 'F' %}background-color: #e2e3e5; opacity: 0.6;{% elif pedido.status == 'C' %}background-color: #f2dede; opacity: 0.6;{% endif %}">
+                            
+                            <td class="ps-3"><input type="checkbox" name="selected_pedidos" value="{{ pedido.id }}" class="form-check-input item-checkbox"></td>
+
+                            <td>
+                                <a href="{% url 'gestao:pedido_editar' pedido.id %}" 
+                                   class="fw-bold text-decoration-none text-primary"
+                                   data-bs-toggle="popover" 
+                                   data-bs-trigger="hover focus" 
+                                   data-bs-html="true"
+                                   data-bs-title="Itens do Pedido"
+                                   data-bs-content="<ul class='list-unstyled mb-0 small text-start'>{% for item_pedido in pedido.itens.all %}<li><strong>{{ item_pedido.quantidade|floatformat }} x</strong> {{ item_pedido.item.nome|escape }}</li>{% endfor %}</ul>">
+                                    {{ pedido.numero_pedido }}
+                                </a>
+                            </td>
+
+                            <td>{{ pedido.data_emissao|date:"d/m/Y" }}</td>
+                            
+                            <td>
+                                <div class="d-flex align-items-center">
+                                    <input type="date" 
+                                           class="form-control form-control-sm border-0 bg-transparent p-0 input-data-entrega"
+                                           value="{{ pedido.data_entrega|date:'Y-m-d' }}"
+                                           onchange="atualizarData(this, {{ pedido.id }})"
+                                           style="width: 135px; cursor: pointer; font-weight: bold;
+                                                  color: {{ pedido|get_cor_urgencia }};"
+                                           id="input-data-{{ pedido.id }}"
+                                    >
+                                    
+                                    <span id="aviso-prazo-{{ pedido.id }}" 
+                                          class="text-danger ms-1" 
+                                          title="Atrasado!"
+                                          style="{% if pedido.status not in 'FC' and pedido.data_entrega %}{% now 'Y-m-d' as hoje %}{% if pedido.data_entrega|date:'Y-m-d' < hoje %}display:inline;{% else %}display:none;{% endif %}{% else %}display:none;{% endif %}">
+                                        <i class="fas fa-exclamation-triangle"></i>
+                                    </span>
+                                </div>
+                            </td>
+                            
+                            <td>
+                                <div class="fw-bold text-truncate" style="max-width: 200px;">{{ pedido.cliente.nome_razao_social }}</div>
+                                {% if pedido.cliente.apelido %}<small class="text-muted">({{ pedido.cliente.apelido }})</small>{% endif %}
+                            </td>
+                            
+                            <td class="fw-bold">R$ {{ pedido.valor_total|floatformat:2 }}</td>
+                            
+                            <td class="text-center">
+                                <div style="cursor: pointer;" onclick="togglePago(this, {{ pedido.id }})" title="Clique para alterar Pagamento">
+                                    {% if pedido.pago %}
+                                        <i class="fas fa-check-circle text-success fa-lg"></i>
+                                    {% else %}
+                                        <i class="fas fa-times-circle text-danger fa-lg"></i>
+                                    {% endif %}
+                                </div>
+                            </td>
+                            
+                            <td class="text-center">
+                                <select class="form-select form-select-sm fw-bold border-0 status-select" 
+                                    style="width: 130px; margin: 0 auto; background-color: {% if pedido.status == 'F' %}#d1e7dd{% elif pedido.status == 'C' %}#f8d7da{% else %}#fff3cd{% endif %}; color: {% if pedido.status == 'F' %}#0f5132{% elif pedido.status == 'C' %}#842029{% else %}#664d03{% endif %};"
+                                    onchange="atualizarStatus(this, {{ pedido.id }})"
+                                >
+                                    <option value="A" {% if pedido.status == 'A' %}selected{% endif %}>Aberto</option>
+                                    <option value="F" {% if pedido.status == 'F' %}selected{% endif %}>Atendido</option>
+                                    <option value="C" {% if pedido.status == 'C' %}selected{% endif %}>Cancelado</option>
+                                </select>
+                            </td>
+                            
+                            <td class="text-end pe-3">
+                                <div class="btn-group" role="group">
+                                    {% if pedido.forma_pagamento == 'PIX' %}
+                                        <a href="{% url 'gestao:gerar_pix_pedido' pedido.id %}" target="_blank" class="btn btn-sm btn-outline-success border-0" id="btn-pix-{{ pedido.id }}" style="{% if pedido.pago %}display: none;{% endif %}"><i class="fas fa-qrcode"></i></a>
+                                        <span class="btn btn-sm text-muted border-0" id="na-pix-{{ pedido.id }}" style="cursor: default; font-size: 0.85rem; {% if not pedido.pago %}display: none;{% endif %}">N/A</span>
+                                    {% else %}
+                                        <span class="btn btn-sm text-muted border-0" style="cursor: default; font-size: 0.85rem;">N/A</span>
+                                    {% endif %}
+                                    <a href="{% url 'gestao:imprimir_pedido_pdf' pedido.id %}" target="_blank" class="btn btn-sm btn-outline-danger border-0"><i class="fas fa-file-pdf"></i></a>
+                                    <a href="{% url 'gestao:clonar_pedido' pedido.id %}" class="btn btn-sm btn-outline-primary border-0" onclick="return confirm('Clonar?');"><i class="fas fa-copy"></i></a>
+                                </div>
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr><td colspan="9" class="text-center py-5 text-muted">Nenhum pedido encontrado.</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</form>
+
+<form id="form-busca" method="get" action="{% url 'gestao:lista_pedidos' %}"></form>
+
+<script>
+    // 1. INICIALIZA OS POPOVERS
+    document.addEventListener('DOMContentLoaded', function () {
+        var popoverTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="popover"]'))
+        var popoverList = popoverTriggerList.map(function (popoverTriggerEl) {
+          return new bootstrap.Popover(popoverTriggerEl)
+        })
+    });
+
+    // 2. Checkbox Todos
+    document.getElementById('select-all').addEventListener('change', function() {
+        document.querySelectorAll('.item-checkbox').forEach(cb => cb.checked = this.checked);
+        atualizarContador();
+    });
+    document.querySelectorAll('.item-checkbox').forEach(cb => cb.addEventListener('change', atualizarContador));
+    function atualizarContador() {
+        document.getElementById('contador-selecao').innerText = document.querySelectorAll('.item-checkbox:checked').length + ' selecionados';
+    }
+
+    // 3. Status FANTASMA
+    function atualizarStatus(selectElement, pedidoId) {
+        const novoStatus = selectElement.value;
+        const linhaTabela = selectElement.closest('tr');
+        selectElement.style.opacity = '0.5';
+
+        fetch(`/gestao/api/alterar-status/${pedidoId}/`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json', 'X-CSRFToken': '{{ csrf_token }}'},
+            body: JSON.stringify({ status: novoStatus })
+        })
+        .then(r => r.json())
+        .then(data => {
+            selectElement.style.opacity = '1';
+            if (data.success) {
+                
+                linhaTabela.style.opacity = '0.6'; 
+                
+                if (novoStatus === 'F') {
+                    selectElement.style.backgroundColor = '#d1e7dd'; selectElement.style.color = '#0f5132';
+                    linhaTabela.style.backgroundColor = '#e2e3e5'; 
+                } else if (novoStatus === 'C') {
+                    selectElement.style.backgroundColor = '#f8d7da'; selectElement.style.color = '#842029';
+                    linhaTabela.style.backgroundColor = '#f2dede'; 
+                } else {
+                    selectElement.style.backgroundColor = '#fff3cd'; selectElement.style.color = '#664d03';
+                    linhaTabela.style.backgroundColor = '#ffffff'; 
+                }
+                aplicarCorData(pedidoId, data.cor, data.peso, data.mostrar_alerta);
+
+            } else { alert('Erro: ' + data.error); }
+        });
+    }
+
+    // 4. Data Editável
+    function atualizarData(inputElement, pedidoId) {
+        const novaData = inputElement.value;
+        inputElement.style.opacity = '0.5';
+
+        fetch(`/gestao/api/alterar-data/${pedidoId}/`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json', 'X-CSRFToken': '{{ csrf_token }}'},
+            body: JSON.stringify({ data_entrega: novaData })
+        })
+        .then(r => r.json())
+        .then(data => {
+            inputElement.style.opacity = '1';
+            if (data.success) {
+                aplicarCorData(pedidoId, data.cor, data.peso, data.mostrar_alerta);
+            } else { alert('Erro: ' + data.error); }
+        });
+    }
+
+    function aplicarCorData(pedidoId, cor, peso, mostrarAlerta) {
+        const input = document.getElementById(`input-data-${pedidoId}`);
+        const aviso = document.getElementById(`aviso-prazo-${pedidoId}`);
+        if (input) {
+            input.style.color = cor;
+        }
+        if (aviso) {
+            aviso.style.display = mostrarAlerta ? 'inline' : 'none';
+        }
+    }
+
+    // 5. Toggle Pago
+    function togglePago(element, pedidoId) {
+        element.style.opacity = '0.5';
+        fetch(`/gestao/api/toggle-pago/${pedidoId}/`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json', 'X-CSRFToken': '{{ csrf_token }}'},
+            body: JSON.stringify({})
+        })
+        .then(r => r.json())
+        .then(data => {
+            element.style.opacity = '1';
+            if (data.success) {
+                if (data.pago) { element.innerHTML = '<i class="fas fa-check-circle text-success fa-lg"></i>'; } 
+                else { element.innerHTML = '<i class="fas fa-times-circle text-danger fa-lg"></i>'; }
+                
+                const btnPix = document.getElementById(`btn-pix-${pedidoId}`);
+                const naPix = document.getElementById(`na-pix-${pedidoId}`);
+                if (btnPix && naPix) {
+                    if (data.pago) { btnPix.style.display = 'none'; naPix.style.display = 'inline-block'; } 
+                    else { btnPix.style.display = 'inline-block'; naPix.style.display = 'none'; }
+                }
+            } else { alert('Erro: ' + data.error); }
+        });
+    }
+</script>
+{% endblock %}

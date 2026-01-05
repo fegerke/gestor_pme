@@ -1,0 +1,358 @@
+{% extends 'gestao/base.html' %}
+{% load static %}
+{% block header %}
+    {{ titulo }}
+{% endblock %}
+
+{% block content %}
+<form method="post" id="pedido-form" autocomplete="off">
+    {% csrf_token %}
+
+    <div class="card shadow-sm border-0 mb-4">
+        <div class="card-header bg-primary text-white py-2">
+            <h6 class="mb-0"><i class="fas fa-info-circle me-2"></i>Dados Gerais</h6>
+        </div>
+        <div class="card-body">
+            <div class="row g-3">
+                <div class="col-md-6">
+                    <label class="form-label fw-bold">Cliente</label>
+                    {{ form.cliente }}
+                    {% if form.cliente.errors %}<div class="text-danger small">{{ form.cliente.errors }}</div>{% endif %}
+                </div>
+                
+                <div class="col-md-3">
+                    <label class="form-label fw-bold">Tabela de Preço</label>
+                    {{ form.tabela_de_preco }}
+                </div>
+
+                <div class="col-md-3">
+                    <label class="form-label fw-bold">Status</label>
+                    {{ form.status }}
+                </div>
+
+                <div class="col-md-3">
+                    <label class="form-label">Data de Entrega</label>
+                    {{ form.data_entrega }}
+                </div>
+
+                <div class="col-md-3">
+                    <label class="form-label">Pagamento</label>
+                    {{ form.forma_pagamento }}
+                </div>
+
+                <div class="col-md-2 d-flex align-items-end">
+                    <div class="form-check mb-2">
+                        {{ form.pago }}
+                        <label class="form-check-label" for="{{ form.pago.id_for_label }}">Pedido Pago?</label>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card shadow-sm border-0 mb-4">
+        <div class="card-header bg-white py-2 d-flex justify-content-between align-items-center">
+            <h6 class="mb-0 fw-bold text-primary"><i class="fas fa-box-open me-2"></i>Itens do Pedido</h6>
+            <button type="button" class="btn btn-sm btn-success" id="add-item-btn">
+                <i class="fas fa-plus"></i> Adicionar Item
+            </button>
+        </div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover mb-0" id="itens-table">
+                    <thead class="bg-light">
+                        <tr>
+                            <th style="width: 40%;">Produto / Serviço</th>
+                            <th style="width: 15%;">Qtd.</th>
+                            <th style="width: 20%;">Preço Unit. (R$)</th>
+                            <th style="width: 20%;">Subtotal (R$)</th>
+                            <th style="width: 5%;"></th>
+                        </tr>
+                    </thead>
+                    <tbody id="itens-body">
+                        {{ formset.management_form }}
+                        
+                        {% for item_form in formset %}
+                            <tr class="item-row">
+                                {% for hidden in item_form.hidden_fields %}
+                                    {{ hidden }}
+                                {% endfor %}
+
+                                <td>
+                                    {{ item_form.item }}
+                                    {% if item_form.item.errors %}<div class="text-danger small">{{ item_form.item.errors }}</div>{% endif %}
+                                </td>
+                                <td>{{ item_form.quantidade }}</td>
+                                <td>{{ item_form.preco_unitario }}</td>
+                                <td>
+                                    <input type="text" class="form-control form-control-sm subtotal-display" readonly value="0.00">
+                                </td>
+                                <td class="text-center align-middle">
+                                    <div class="d-none">{{ item_form.DELETE }}</div>
+                                    <button type="button" class="btn btn-sm btn-outline-danger remove-item-btn" title="Remover">
+                                        <i class="fas fa-trash"></i>
+                                    </button>
+                                </td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        <div class="card-footer bg-light">
+            <div class="row justify-content-end text-end">
+                <div class="col-md-4">
+                    <h5 class="mb-0">Subtotal Itens: <span id="total-itens-display">R$ 0,00</span></h5>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card shadow-sm border-0 mb-4">
+        <div class="card-header bg-light py-2">
+            <h6 class="mb-0 fw-bold"><i class="fas fa-calculator me-2"></i>Fechamento</h6>
+        </div>
+        <div class="card-body">
+            <div class="row g-3">
+                <div class="col-md-3">
+                    <label class="form-label">Tipo de Desconto</label>
+                    {{ form.tipo_desconto }}
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Valor Desconto</label>
+                    {{ form.valor_desconto }}
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Taxa de Entrega (R$)</label>
+                    {{ form.taxa_entrega }}
+                </div>
+                <div class="col-md-3 bg-warning bg-opacity-10 p-2 rounded border border-warning text-center">
+                    <label class="form-label fw-bold text-dark">TOTAL FINAL</label>
+                    <h3 class="fw-bold text-primary mb-0" id="grand-total-display">R$ 0,00</h3>
+                </div>
+            </div>
+            <div class="mt-3">
+                <label class="form-label">Observações</label>
+                {{ form.observacoes }}
+            </div>
+        </div>
+    </div>
+
+    <div class="d-flex justify-content-between mb-5 align-items-center">
+        <div>
+            <a href="{% url 'gestao:lista_pedidos' %}" class="btn btn-secondary me-2">
+                <i class="fas fa-arrow-left"></i> Voltar
+            </a>
+            
+            {% if form.instance.pk %}
+            <a href="{% url 'gestao:imprimir_pedido_pdf' form.instance.pk %}" target="_blank" class="btn btn-outline-dark">
+                <i class="fas fa-print"></i> Imprimir PDF
+            </a>
+            {% endif %}
+        </div>
+
+        <button type="submit" class="btn btn-primary btn-lg px-5">
+            <i class="fas fa-save"></i> Salvar Pedido
+        </button>
+    </div>
+
+</form>
+
+<div id="empty-form" class="d-none">
+    <table>
+        <tr class="item-row">
+            {% for hidden in formset.empty_form.hidden_fields %}
+                {{ hidden }}
+            {% endfor %}
+            <td>{{ formset.empty_form.item }}</td>
+            <td>{{ formset.empty_form.quantidade }}</td>
+            <td>{{ formset.empty_form.preco_unitario }}</td>
+            <td><input type="text" class="form-control form-control-sm subtotal-display" readonly value="0.00"></td>
+            <td class="text-center align-middle">
+                <div class="d-none">{{ formset.empty_form.DELETE }}</div>
+                <button type="button" class="btn btn-sm btn-outline-danger remove-item-btn"><i class="fas fa-trash"></i></button>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const totalForms = document.getElementById('id_itens-TOTAL_FORMS');
+        const itensBody = document.getElementById('itens-body');
+        const emptyFormTemplate = document.getElementById('empty-form').querySelector('tr');
+        
+        // --- 0. FUNÇÃO PARA LIGAR O SELECT2 (BUSCA INTELIGENTE) ---
+        function initSelect2(element) {
+            const el = $(element);
+            
+            el.select2({
+                theme: 'bootstrap-5',
+                width: '100%',
+                placeholder: 'Selecione ou digite para buscar...',
+                allowClear: true,
+                language: {
+                    noResults: function() { return "Nenhum resultado encontrado"; }
+                }
+            });
+
+            // MÁGICA DO CURSOR: Busca preço e pula pra Qtd
+            el.on('select2:select', function (e) {
+                // 1. Dispara o evento para buscar o preço
+                element.dispatchEvent(new Event('change', { bubbles: true }));
+                
+                // 2. Pula o cursor para o campo Quantidade na mesma linha
+                const row = element.closest('tr');
+                const qtdInput = row.querySelector('.qtd-input');
+                
+                if (qtdInput) {
+                    setTimeout(() => {
+                        qtdInput.focus();
+                        qtdInput.select();
+                    }, 100);
+                }
+            });
+        }
+
+        // INICIALIZAÇÃO DOS CAMPOS EXISTENTES
+        if (typeof $ !== 'undefined') {
+            $(document).ready(function() {
+                initSelect2($('#id_cliente')); 
+                $('.item-selector').each(function() {
+                    initSelect2(this); 
+                });
+            });
+        }
+
+        // --- 1. FUNÇÕES DE CÁLCULO ---
+        function updateRowTotal(row) {
+            const qtdInput = row.querySelector('.qtd-input');
+            const priceInput = row.querySelector('.price-input');
+            const subtotalDisplay = row.querySelector('.subtotal-display');
+            
+            const deleteInput = row.querySelector('input[name$="-DELETE"]');
+            if (deleteInput && deleteInput.checked) {
+                return 0;
+            }
+
+            const qtd = parseFloat(qtdInput.value) || 0;
+            const price = parseFloat(priceInput.value.replace(',', '.')) || 0; 
+            const total = qtd * price;
+            
+            subtotalDisplay.value = total.toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+            return total;
+        }
+
+        function updateGrandTotal() {
+            let totalItens = 0;
+            document.querySelectorAll('.item-row').forEach(row => {
+                if (row.style.display !== 'none') {
+                    totalItens += updateRowTotal(row);
+                }
+            });
+
+            document.getElementById('total-itens-display').innerText = totalItens.toLocaleString('pt-BR', {style: 'currency', currency: 'BRL'});
+
+            const tipoDesconto = document.getElementById('id_tipo_desconto').value;
+            const valorDesconto = parseFloat(document.getElementById('id_valor_desconto').value.replace(',', '.')) || 0;
+            const taxaEntrega = parseFloat(document.getElementById('id_taxa_entrega').value.replace(',', '.')) || 0;
+
+            let descontoCalculado = 0;
+            if (tipoDesconto === 'P') { 
+                descontoCalculado = (totalItens * valorDesconto) / 100;
+            } else { 
+                descontoCalculado = valorDesconto;
+            }
+
+            const totalFinal = Math.max(0, totalItens - descontoCalculado + taxaEntrega);
+            document.getElementById('grand-total-display').innerText = totalFinal.toLocaleString('pt-BR', {style: 'currency', currency: 'BRL'});
+        }
+
+        // --- 2. BUSCA DE PREÇO (AJAX) ---
+        function fetchPrice(row) {
+            const itemSelect = row.querySelector('.item-selector');
+            const priceInput = row.querySelector('.price-input');
+            const tabelaId = document.getElementById('id_tabela_de_preco').value;
+            const itemId = itemSelect.value; 
+
+            if (itemId && tabelaId) {
+                priceInput.style.opacity = '0.5';
+                
+                fetch(`/gestao/api/get-item-price/?item_id=${itemId}&tabela_id=${tabelaId}`)
+                    .then(response => response.json())
+                    .then(data => {
+                        priceInput.value = data.price; 
+                        priceInput.style.opacity = '1';
+                        updateRowTotal(row);
+                        updateGrandTotal();
+                    })
+                    .catch(err => {
+                        console.error('Erro ao buscar preço:', err);
+                        priceInput.style.opacity = '1';
+                    });
+            }
+        }
+
+        // --- 3. EVENT LISTENERS GERAIS ---
+        document.getElementById('pedido-form').addEventListener('input', function(e) {
+            if (e.target.matches('.qtd-input, .price-input, #id_valor_desconto, #id_taxa_entrega')) {
+                updateGrandTotal();
+            }
+        });
+        
+        document.getElementById('pedido-form').addEventListener('change', function(e) {
+            if (e.target.classList.contains('item-selector')) {
+                const row = e.target.closest('tr');
+                fetchPrice(row);
+            }
+            if (e.target.matches('#id_tipo_desconto')) {
+                updateGrandTotal();
+            }
+        });
+
+        // --- 4. ADICIONAR ITEM ---
+        document.getElementById('add-item-btn').addEventListener('click', function() {
+            const formIdx = totalForms.value;
+            const newRow = emptyFormTemplate.cloneNode(true);
+            
+            newRow.innerHTML = newRow.innerHTML.replace(/__prefix__/g, formIdx);
+            itensBody.appendChild(newRow);
+            totalForms.value = parseInt(formIdx) + 1;
+            
+            // Ativa Select2 na nova linha
+            const newSelect = newRow.querySelector('.item-selector');
+            initSelect2(newSelect);
+            
+            // Abre o Select2 automaticamente
+            setTimeout(() => {
+                $(newSelect).select2('open');
+            }, 50);
+
+            updateGrandTotal();
+        });
+
+        // --- 5. REMOVER ITEM ---
+        itensBody.addEventListener('click', function(e) {
+            const btn = e.target.closest('.remove-item-btn');
+            if (btn) {
+                const row = btn.closest('tr');
+                const deleteInput = row.querySelector('input[name$="-DELETE"]');
+                
+                if (deleteInput) {
+                    deleteInput.checked = true;
+                    row.style.display = 'none';
+                    updateGrandTotal();
+                } else {
+                    const select = row.querySelector('.item-selector');
+                    if ($(select).data('select2')) {
+                        $(select).select2('destroy');
+                    }
+                    row.remove();
+                }
+            }
+        });
+
+        updateGrandTotal();
+    });
+</script>
+{% endblock %}

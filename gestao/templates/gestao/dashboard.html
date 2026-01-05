@@ -1,0 +1,99 @@
+{% extends 'gestao/base.html' %}
+{% load l10n %}
+
+{% block content %}
+<div class="row g-3 mb-4">
+    <div class="col-md-3">
+        <div class="card card-kpi h-100 border-start border-4 border-primary">
+            <div class="card-body">
+                <h6 class="text-muted text-uppercase small">Vendas (Mês)</h6>
+                <h3 class="fw-bold text-primary">R$ {{ total_vendas_mes|default:"0,00"|floatformat:2 }}</h3>
+                <small class="text-success"><i class="fas fa-check-circle"></i> Faturado</small>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-3">
+        <div class="card card-kpi h-100 border-start border-4 border-warning">
+            <div class="card-body">
+                <h6 class="text-muted text-uppercase small">Pendentes</h6>
+                <h3 class="fw-bold text-warning">{{ pedidos_pendentes }}</h3>
+                <small class="text-muted">Aguardando ação</small>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-3">
+        <div class="card card-kpi h-100 border-start border-4 border-success">
+            <div class="card-body">
+                <h6 class="text-muted text-uppercase small">Clientes Ativos</h6>
+                <h3 class="fw-bold text-success">{{ clientes_ativos }}</h3>
+                <small class="text-muted">Cadastrados</small>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-3">
+        <div class="card card-kpi h-100 border-start border-4 border-info">
+            <div class="card-body">
+                <h6 class="text-muted text-uppercase small">Ticket Médio</h6>
+                <h3 class="fw-bold text-info">R$ {{ ticket_medio|floatformat:2 }}</h3>
+                <small class="text-muted">Por pedido</small>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="card shadow-sm border-0">
+    <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center">
+        <h5 class="mb-0 text-secondary"><i class="fas fa-list me-2"></i> Últimos Pedidos</h5>
+        <a href="{% url 'admin:gestao_pedido_add' %}" class="btn btn-sm btn-primary"><i class="fas fa-plus"></i> Novo Pedido</a>
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead class="bg-light">
+                    <tr>
+                        <th class="ps-4">Pedido #</th>
+                        <th>Cliente</th>
+                        <th>Data</th>
+                        <th>Valor</th>
+                        <th>Status</th>
+                        <th class="text-end pe-4">Ações</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for pedido in ultimos_pedidos %}
+                    <tr>
+                        <td class="ps-4 fw-bold">#{{ pedido.numero_pedido }}</td>
+                        <td>{{ pedido.cliente.nome_razao_social }}</td>
+                        <td>{{ pedido.data_emissao|date:"d/m/Y" }}</td>
+                        <td class="fw-bold text-dark">R$ {{ pedido.valor_total|floatformat:2 }}</td>
+                        <td>
+                            {% if pedido.status == 'F' %}
+                                <span class="badge bg-success">Faturado</span>
+                            {% elif pedido.status == 'C' %}
+                                <span class="badge bg-danger">Cancelado</span>
+                            {% else %}
+                                <span class="badge bg-secondary">Aberto</span>
+                            {% endif %}
+                        </td>
+                        <td class="text-end pe-4">
+                            <a href="{% url 'admin:gestao_pedido_change' pedido.id %}" class="btn btn-sm btn-outline-secondary" title="Editar">
+                                <i class="fas fa-edit"></i>
+                            </a>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="6" class="text-center py-4 text-muted">Nenhum pedido encontrado.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    <div class="card-footer bg-white text-center py-3">
+        <a href="{% url 'gestao:lista_pedidos' %}" class="text-decoration-none fw-bold text-primary">Ver todos os pedidos &rarr;</a>
+</div>
+{% endblock %}
