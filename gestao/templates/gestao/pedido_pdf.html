@@ -163,13 +163,30 @@
                     {% if pedido.cliente.apelido %} <span style="color: #666;">({{ pedido.cliente.apelido }})</span>{% endif %}
                 </div>
                 <div>
-                    {{ pedido.cliente.logradouro|default:"" }}, {{ pedido.cliente.numero|default:"" }} 
-                    {% if pedido.cliente.complemento %} - {{ pedido.cliente.complemento }}{% endif %}<br>
-                    {{ pedido.cliente.bairro|default:"" }} - {{ pedido.cliente.cidade|default:"" }}/{{ pedido.cliente.uf|default:"" }}
+                    {# --- BLOCO 1: Rua, Número e Complemento --- #}
+                    {% if pedido.cliente.logradouro %}
+                        {{ pedido.cliente.logradouro }}
+                        {% if pedido.cliente.numero %}, {{ pedido.cliente.numero }}{% endif %}
+                        {% if pedido.cliente.complemento %} - {{ pedido.cliente.complemento }}{% endif %}
+                        <br>
+                    {% endif %}
+
+                    {# --- BLOCO 2: Bairro, Cidade e UF --- #}
+                    {% if pedido.cliente.bairro or pedido.cliente.cidade %}
+                        {% if pedido.cliente.bairro %}
+                            {{ pedido.cliente.bairro }}
+                            {% if pedido.cliente.cidade %} - {% endif %}
+                        {% endif %}
+                        
+                        {% if pedido.cliente.cidade %}
+                            {{ pedido.cliente.cidade }}{% if pedido.cliente.uf %}/{{ pedido.cliente.uf }}{% endif %}
+                        {% endif %}
+                        <br> {% endif %}
                     
+                    {# --- BLOCO 3: Telefone --- #}
                     {% with telefone=pedido.cliente.celular|default:pedido.cliente.telefone_fixo %}
                         {% if telefone %}
-                            <br><strong>Tel:</strong> {{ telefone|formatar_telefone }}
+                            <strong>Tel:</strong> {{ telefone|formatar_telefone }}
                         {% endif %}
                     {% endwith %}
                 </div>
